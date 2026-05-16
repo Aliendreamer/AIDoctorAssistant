@@ -22,7 +22,8 @@ public sealed class QueryService
     {
         _kernel = kernel;
         var searchEndpoint = configuration["WebSearch:Endpoint"] ?? "http://localhost:8081";
-        _webSearchPlugin = new WebSearchPlugin(httpClient, searchEndpoint);
+        var allowedDomains = configuration.GetSection("WebSearch:AllowedDomains").Get<List<string>>() ?? [];
+        _webSearchPlugin = new WebSearchPlugin(httpClient, searchEndpoint, allowedDomains);
     }
 
     public async Task<QueryResult> ExecuteAsync(QueryRequest request, CancellationToken cancellationToken = default)

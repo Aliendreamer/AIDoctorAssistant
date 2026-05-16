@@ -25,7 +25,6 @@ search:
     - html
     - json
 
-# Enable engines relevant to medical queries
 engines:
   - name: google
     engine: google
@@ -37,24 +36,27 @@ engines:
     categories: general
     disabled: false
 
-  - name: pubmed
-    engine: pubmed
-    categories: science
-    disabled: false
-    timeout: 10.0
-
-  - name: semantic scholar
-    engine: semantic_scholar
-    categories: science
-    disabled: false
-
-  - name: wikipedia
-    engine: wikipedia
+  - name: bing
+    engine: bing
     categories: general
     disabled: false
+
+  # Disable everything else — domain filtering in the query handles scope
+  - name: pubmed
+    disabled: true
+
+  - name: semantic scholar
+    disabled: true
+
+  - name: wikipedia
+    disabled: true
+
+  - name: wikidata
+    disabled: true
+
+  - name: arxiv
+    disabled: true
 
 categories_as_tabs:
   general:
     name: General
-  science:
-    name: Science & Medical
