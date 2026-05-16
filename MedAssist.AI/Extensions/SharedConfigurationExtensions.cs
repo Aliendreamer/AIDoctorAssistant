@@ -7,22 +7,32 @@ public static class SharedConfigurationExtensions
 {
     private const string _configPathEnvVar = "MEDASSIST_CONFIG_PATH";
     private const string _sharedFileName = "appsettings.shared.json";
+    private const string _envFilePattern = "appsettings.{0}.json";
 
-    /// <summary>
-    /// Inserts the shared configuration file at the lowest priority position so that
-    /// per-project appsettings and environment variables always take precedence.
-    /// </summary>
     public static IConfigurationBuilder AddSharedConfiguration(this IConfigurationBuilder builder)
     {
-        var path = ResolveSharedConfigPath();
-        if (path is null)
+        var configDir = ResolveSharedConfigDir();
+        if (configDir is null)
         {
             return builder;
         }
 
+        // Insert at 0 = lowest priority; environment variables and secrets still win
         builder.Sources.Insert(0, new JsonConfigurationSource
         {
-            Path = path,
+            Path = Path.Combine(configDir, _sharedFileName),
+            Optional = true,
+            ReloadOnChange = false
+        });
+
+        // Environment-specific override (e.g. appsettings.Development.json), slightly higher priority
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? "Production";
+
+        builder.Sources.Insert(1, new JsonConfigurationSource
+        {
+            Path = Path.Combine(configDir, string.Format(_envFilePattern, environment)),
             Optional = true,
             ReloadOnChange = false
         });
@@ -30,13 +40,13 @@ public static class SharedConfigurationExtensions
         return builder;
     }
 
-    private static string? ResolveSharedConfigPath()
+    private static string? ResolveSharedConfigDir()
     {
         // 1. Explicit override — used by Docker and CI
         var explicitDir = Environment.GetEnvironmentVariable(_configPathEnvVar);
         if (explicitDir is not null)
         {
-            return Path.Combine(explicitDir, _sharedFileName);
+            return explicitDir;
         }
 
         // 2. Walk up from the app's base directory to find the solution root
@@ -45,7 +55,7 @@ public static class SharedConfigurationExtensions
         {
             if (dir.EnumerateFiles("*.slnx").Any() || dir.EnumerateFiles("*.sln").Any())
             {
-                return Path.Combine(dir.FullName, "config", _sharedFileName);
+                return Path.Combine(dir.FullName, "config");
             }
 
             dir = dir.Parent;
