@@ -1,11 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <IsServiceHost>true</IsServiceHost>
     <UserSecretsId>dotnet-MedAssist.Indexer-100bbebb-7bee-4291-bfb3-da1ff509f574</UserSecretsId>
   </PropertyGroup>
 
@@ -15,13 +11,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Hosting" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
     <PackageReference Include="Qdrant.Client" />
-    <PackageReference Include="Serilog.AspNetCore" />
-    <PackageReference Include="Serilog.Enrichers.Environment" />
-    <PackageReference Include="Serilog.Formatting.Compact" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,4 +19,5 @@
     <ProjectReference Include="..\MedAssist.AI\MedAssist.AI.csproj" />
     <ProjectReference Include="..\MedAssist.Data\MedAssist.Data.csproj" />
   </ItemGroup>
+
 </Project>

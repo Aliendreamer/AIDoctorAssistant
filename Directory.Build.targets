@@ -1,0 +1,14 @@
+<Project>
+  <!--
+    Packages shared by every service host (Web + Indexer).
+    IsServiceHost is set to true in those project files.
+  -->
+  <ItemGroup Condition="'$(IsServiceHost)' == 'true'">
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Enrichers.Environment" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+  </ItemGroup>
+</Project>
