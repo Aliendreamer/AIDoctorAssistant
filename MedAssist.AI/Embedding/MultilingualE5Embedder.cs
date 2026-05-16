@@ -36,7 +36,6 @@ public sealed class MultilingualE5Embedder : IEmbedder, IDisposable
         var inputIds = Array.ConvertAll(tokenIds, id => (long)id);
         var attentionMask = new long[inputIds.Length];
         Array.Fill(attentionMask, 1L);
-        var tokenTypeIds = new long[inputIds.Length];
 
         var seqLen = inputIds.Length;
 
@@ -44,8 +43,13 @@ public sealed class MultilingualE5Embedder : IEmbedder, IDisposable
         {
             NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.InputIds, new DenseTensor<long>(inputIds, [1, seqLen])),
             NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.AttentionMask, new DenseTensor<long>(attentionMask, [1, seqLen])),
-            NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.TokenTypeIds, new DenseTensor<long>(tokenTypeIds, [1, seqLen])),
         };
+
+        if (_session.InputMetadata.ContainsKey(OnnxConstants.Inputs.TokenTypeIds))
+        {
+            var tokenTypeIds = new long[seqLen];
+            inputs.Add(NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.TokenTypeIds, new DenseTensor<long>(tokenTypeIds, [1, seqLen])));
+        }
 
         using var outputs = _session.Run(inputs);
         var lastHiddenState = outputs.First(o => o.Name == OnnxConstants.Outputs.LastHiddenState).AsEnumerable<float>().ToArray();

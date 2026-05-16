@@ -59,14 +59,27 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
             try
             {
                 await using var bgScope = _scopeFactory.CreateAsyncScope();
-                var docling = bgScope.ServiceProvider.GetRequiredService<DoclingClient>();
                 var indexer = bgScope.ServiceProvider.GetRequiredService<BookIndexer>();
 
-                _logger.LogInformation("Starting Docling conversion for {BookId}", bookId);
-                await using var pdfStream = File.OpenRead(pdfPath);
-                var markdown = await docling.ConvertPdfToMarkdownAsync(pdfStream, $"{bookId}.pdf");
+                var markdownPath = Path.ChangeExtension(pdfPath, ".md");
+                string markdown;
 
-                _logger.LogInformation("Docling conversion done for {BookId}, starting indexing", bookId);
+                if (File.Exists(markdownPath))
+                {
+                    _logger.LogInformation("Using cached Docling markdown for {BookId}", bookId);
+                    markdown = await File.ReadAllTextAsync(markdownPath);
+                }
+                else
+                {
+                    var docling = bgScope.ServiceProvider.GetRequiredService<DoclingClient>();
+                    _logger.LogInformation("Starting Docling conversion for {BookId}", bookId);
+                    await using var pdfStream = File.OpenRead(pdfPath);
+                    markdown = await docling.ConvertPdfToMarkdownAsync(pdfStream, $"{bookId}.pdf");
+                    await File.WriteAllTextAsync(markdownPath, markdown);
+                    _logger.LogInformation("Docling conversion done for {BookId}, markdown cached at {Path}", bookId, markdownPath);
+                }
+
+                _logger.LogInformation("Starting indexing for {BookId}", bookId);
                 await indexer.IndexAsync(markdown, bookId, book.Title, book.Author, book.Language, book.Edition);
 
                 _logger.LogInformation("Background indexing complete for {BookId}", bookId);

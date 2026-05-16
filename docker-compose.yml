@@ -36,9 +36,16 @@ services:
       - medassist-net
 
   docling:
-    image: ghcr.io/ds4sd/docling-serve:latest
+    image: ghcr.io/docling-project/docling-serve-cu128:latest
     ports:
       - "5001:5001"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     networks:
       - medassist-net
 

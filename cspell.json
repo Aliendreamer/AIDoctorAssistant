@@ -165,6 +165,14 @@
     "SentencePiece",
 
     "лечение",
-    "хипертония"
+    "хипертония",
+
+    "ASPNETCORE",
+    "pgadmin",
+    "pgAdmin",
+    "PGADMIN",
+    "dpage",
+    "healthcheck",
+    "isready"
   ]
 }

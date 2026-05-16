@@ -17,35 +17,31 @@ public sealed class DoclingClient
 
     public async Task<string> ConvertPdfToMarkdownAsync(Stream pdfStream, string fileName, CancellationToken cancellationToken = default)
     {
-        using var ms = new MemoryStream();
-        await pdfStream.CopyToAsync(ms, cancellationToken);
-        var base64 = Convert.ToBase64String(ms.ToArray());
+        using var content = new MultipartFormDataContent();
+        using var fileContent = new StreamContent(pdfStream);
+        content.Add(fileContent, "files", fileName);
 
-        var submitPayload = new DoclingSubmitRequest(
-            [new DoclingFileSource(base64, fileName)]);
-
-        using var submitResponse = await _httpClient.PostAsJsonAsync(
-            "/v1alpha/convert/source/async", submitPayload, cancellationToken);
+        using var submitResponse = await _httpClient.PostAsync(
+            "/v1/convert/file/async", content, cancellationToken);
         submitResponse.EnsureSuccessStatusCode();
 
         var task = await submitResponse.Content.ReadFromJsonAsync<DoclingTaskStatus>(cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException("Docling returned an empty task response.");
 
-        _logger.LogInformation("Docling task {TaskId} queued for '{FileName}', polling for completion", task.TaskId, fileName);
+        _logger.LogInformation("Docling task {TaskId} queued for '{FileName}'", task.TaskId, fileName);
 
         while (true)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
 
             using var pollResponse = await _httpClient.GetAsync(
-                $"/v1alpha/status/poll/{task.TaskId}?wait=30", cancellationToken);
+                $"/v1/status/poll/{task.TaskId}", cancellationToken);
             pollResponse.EnsureSuccessStatusCode();
 
             var status = await pollResponse.Content.ReadFromJsonAsync<DoclingTaskStatus>(cancellationToken: cancellationToken)
                 ?? throw new InvalidOperationException("Docling returned an empty poll response.");
 
-            _logger.LogInformation("Docling task {TaskId} status: {Status} (queue position: {Position})",
-                status.TaskId, status.Status, status.Position);
+            _logger.LogInformation("Docling task {TaskId} status: {Status}", task.TaskId, status.Status);
 
             if (status.Status == "success")
             {
@@ -59,7 +55,7 @@ public sealed class DoclingClient
         }
 
         using var resultResponse = await _httpClient.GetAsync(
-            $"/v1alpha/result/{task.TaskId}", cancellationToken);
+            $"/v1/result/{task.TaskId}", cancellationToken);
         resultResponse.EnsureSuccessStatusCode();
 
         var result = await resultResponse.Content.ReadFromJsonAsync<DoclingConvertResponse>(cancellationToken: cancellationToken)
@@ -69,13 +65,6 @@ public sealed class DoclingClient
             ?? throw new InvalidOperationException("Docling response did not contain markdown content.");
     }
 
-    private sealed record DoclingSubmitRequest(
-        [property: JsonPropertyName("file_sources")] IReadOnlyList<DoclingFileSource> FileSources);
-
-    private sealed record DoclingFileSource(
-        [property: JsonPropertyName("base64_string")] string Base64String,
-        [property: JsonPropertyName("filename")] string Filename);
-
     private sealed class DoclingTaskStatus
     {
         [JsonPropertyName("task_id")]
@@ -83,9 +72,6 @@ public sealed class DoclingClient
 
         [JsonPropertyName("task_status")]
         public string Status { get; init; } = string.Empty;
-
-        [JsonPropertyName("task_position")]
-        public int? Position { get; init; }
     }
 
     private sealed class DoclingConvertResponse
