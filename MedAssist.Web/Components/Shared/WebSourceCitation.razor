@@ -1,0 +1,17 @@
+@using MedAssist.Shared.Models
+
+<div class="citation web-citation">
+    <span class="badge bg-info me-2">🌐 @(Citation.SourceName ?? "Web")</span>
+    @if (!string.IsNullOrWhiteSpace(Citation.ArticleTitle))
+    {
+        <strong>@Citation.ArticleTitle</strong>
+    }
+    @if (!string.IsNullOrWhiteSpace(Citation.Url))
+    {
+        <a href="@Citation.Url" target="_blank" rel="noopener noreferrer" class="ms-2">@Citation.Url</a>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SourceCitation Citation { get; set; } = default!;
+}

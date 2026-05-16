@@ -1,0 +1,166 @@
+@page "/query"
+@using MedAssist.Shared.Models
+@using MedAssist.Web.Services
+@inject QueryService QueryService
+@inject BookCatalogService BookCatalogService
+@rendermode InteractiveServer
+
+<PageTitle>MedAssist — Query</PageTitle>
+
+<h1>Medical Query</h1>
+
+<div class="query-form">
+    <div class="form-group">
+        <label for="queryType">Query Type</label>
+        <select id="queryType" @bind="_queryType" class="form-select">
+            <option value="@QueryType.Disease">Disease Info</option>
+            <option value="@QueryType.Symptoms">Symptoms</option>
+            <option value="@QueryType.Treatment">Treatment</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="queryText">Question</label>
+        <textarea id="queryText" @bind="_queryText" class="form-control" rows="3"
+                  placeholder="e.g. Down Syndrome, or symptoms: fever cough shortness of breath"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="language">Language</label>
+        <select id="language" @bind="_language" class="form-select">
+            <option value="@LanguageFilter.Both">Both (EN + BG)</option>
+            <option value="@LanguageFilter.English">English only</option>
+            <option value="@LanguageFilter.Bulgarian">Bulgarian only</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Books to search</label>
+        <div class="book-list">
+            @foreach (var book in _books)
+            {
+                <label class="book-item">
+                    <input type="checkbox" value="@book.Id" @onchange="e => ToggleBook(book.Id, (bool)(e.Value ?? false))" />
+                    @book.Title — @book.Author (@book.Language.ToUpperInvariant())
+                </label>
+            }
+            @if (_books.Count == 0)
+            {
+                <span class="text-muted">No books indexed yet.</span>
+            }
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label class="web-search-toggle">
+            <input type="checkbox" @bind="_webSearchEnabled" />
+            Search web if needed (PubMed)
+        </label>
+        @if (_webSearchEnabled)
+        {
+            <small class="text-muted">Results may include PubMed sources.</small>
+        }
+    </div>
+
+    <button class="btn btn-primary" @onclick="SubmitQueryAsync" disabled="@_loading">
+        @if (_loading)
+        {
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            <span>Searching...</span>
+        }
+        else
+        {
+            <span>Search</span>
+        }
+    </button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger mt-3">@_error</div>
+}
+
+@if (_result is not null)
+{
+    <div class="results mt-4">
+        <h2>Results</h2>
+        <div class="answer-text">@((MarkupString)_result.Answer.Replace("\n", "<br/>"))</div>
+
+        @if (_result.Sources.Any())
+        {
+            <h3 class="mt-3">Sources</h3>
+
+            @foreach (var source in _result.Sources.Where(s => s.SourceType == SourceType.Book))
+            {
+                <BookSourceCitation Citation="source" />
+            }
+
+            @foreach (var source in _result.Sources.Where(s => s.SourceType == SourceType.Web))
+            {
+                <WebSourceCitation Citation="source" />
+            }
+        }
+    </div>
+}
+
+@code {
+    private List<BookInfo> _books = [];
+    private HashSet<string> _selectedBookIds = [];
+    private QueryType _queryType = QueryType.Disease;
+    private LanguageFilter _language = LanguageFilter.Both;
+    private string _queryText = string.Empty;
+    private bool _webSearchEnabled;
+    private bool _loading;
+    private QueryResult? _result;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _books = (await BookCatalogService.GetAllBooksAsync()).ToList();
+    }
+
+    private void ToggleBook(string bookId, bool selected)
+    {
+        if (selected)
+        {
+            _selectedBookIds.Add(bookId);
+        }
+        else
+        {
+            _selectedBookIds.Remove(bookId);
+        }
+    }
+
+    private async Task SubmitQueryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_queryText))
+        {
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        _result = null;
+
+        try
+        {
+            var request = new QueryRequest
+            {
+                Query = _queryText,
+                QueryType = _queryType,
+                Language = _language,
+                BookIds = _selectedBookIds.Count > 0 ? [.._selectedBookIds] : null,
+                WebSearchEnabled = _webSearchEnabled
+            };
+            _result = await QueryService.ExecuteAsync(request);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Query failed: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

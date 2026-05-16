@@ -1,0 +1,37 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.lscache
+TestResults/
+
+## Secrets & local config
+appsettings.Development.json
+appsettings.Local.json
+*.env
+.env
+
+## Database
+*.db
+*.db-shm
+*.db-wal
+
+## Book content (large files, not tracked)
+books/raw/
+books/processed/
+
+## Models (downloaded at runtime)
+models/
+
+## Docker
+docker-compose.override.yml
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Logs
+logs/
+*.log

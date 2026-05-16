@@ -1,0 +1,76 @@
+# Normalize line endings to LF on commit, check out as-is on Windows
+* text=auto eol=lf
+
+# C# source
+*.cs        text eol=lf diff=csharp
+*.csx       text eol=lf diff=csharp
+*.razor     text eol=lf
+*.cshtml    text eol=lf
+
+# Project / solution files
+*.csproj    text eol=lf
+*.props     text eol=lf
+*.targets   text eol=lf
+*.sln       text eol=lf merge=union
+*.slnx      text eol=lf merge=union
+
+# Config & markup
+*.json      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.xml       text eol=lf
+*.md        text eol=lf
+*.txt       text eol=lf
+*.toml      text eol=lf
+*.editorconfig text eol=lf
+*.gitignore    text eol=lf
+*.gitattributes text eol=lf
+
+# Web assets
+*.css       text eol=lf
+*.scss      text eol=lf
+*.js        text eol=lf
+*.ts        text eol=lf
+*.html      text eol=lf
+*.svg       text eol=lf
+
+# Docker
+Dockerfile  text eol=lf
+*.dockerignore text eol=lf
+
+# Shell scripts — must be LF
+*.sh        text eol=lf
+
+# Windows scripts — must be CRLF
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# Binary — never diff or modify
+*.dll       binary
+*.exe       binary
+*.pdb       binary
+*.zip       binary
+*.tar.gz    binary
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.otf       binary
+*.eot       binary
+
+# ONNX model files (downloaded at runtime, but if ever committed)
+*.onnx      binary
+
+# SQLite
+*.db        binary
+*.db-shm    binary
+*.db-wal    binary
+
+# git-crypt encrypted directories
+books/**  filter=git-crypt diff=git-crypt
+config/** filter=git-crypt diff=git-crypt

@@ -1,0 +1,159 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: MedAssist.Web/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - VectorStore__Qdrant__Endpoint=http://qdrant:6334
+      - AI__ModelProvider=ollama
+      - AI__Ollama__Endpoint=http://ollama:11434
+      - AI__Ollama__ModelName=qwen2.5:7b
+      - Database__Path=/data/medassist.db
+      - Models__Path=/models
+      - OpenTelemetry__Endpoint=http://otel-collector:4317
+      - OpenTelemetry__ServiceName=medassist-web
+    volumes:
+      - medassist-db:/data
+      - medassist-models:/models
+      - ./books/raw:/books/raw:ro
+      - ./books/processed:/books/processed:ro
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      otel-collector:
+        condition: service_healthy
+    networks:
+      - medassist-net
+
+  indexer:
+    build:
+      context: .
+      dockerfile: MedAssist.Indexer/Dockerfile
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+      - VectorStore__Qdrant__Endpoint=http://qdrant:6334
+      - Database__Path=/data/medassist.db
+      - Models__Path=/models
+    volumes:
+      - medassist-db:/data
+      - medassist-models:/models
+      - ./books/raw:/books/raw
+      - ./books/processed:/books/processed
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - medassist-net
+    profiles:
+      - indexer
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"   # REST API + healthcheck
+      - "6334:6334"   # gRPC (used by QdrantClient)
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medassist-net
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - medassist-net
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    ports:
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+      - "8888:8888"    # Prometheus metrics (self-observability)
+      - "13133:13133"  # Health check
+    volumes:
+      - ./docker/otel-collector/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:13133/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - tempo
+    networks:
+      - medassist-net
+
+  tempo:
+    image: grafana/tempo:latest
+    ports:
+      - "3200:3200"    # HTTP API + query frontend
+      - "9095:9095"    # gRPC
+    volumes:
+      - ./docker/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/tmp/tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3200/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - medassist-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-remote-write-receiver"
+    networks:
+      - medassist-net
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=medassist
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - tempo
+    networks:
+      - medassist-net
+
+volumes:
+  qdrant-data:
+  ollama-models:
+  prometheus-data:
+  grafana-data:
+  tempo-data:
+  medassist-db:
+  medassist-models:
+
+networks:
+  medassist-net:
+    driver: bridge

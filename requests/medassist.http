@@ -1,0 +1,114 @@
+### MedAssist API Requests
+### Base URL: http://localhost:8080
+### Set @token after login
+
+@baseUrl = http://localhost:8080
+@token = <paste_token_here>
+
+# ─────────────────────────────────────────
+# AUTH
+# ─────────────────────────────────────────
+
+### Login as admin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "medassist123"
+}
+
+### Login as doctor
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "doctor",
+  "password": "doctor123"
+}
+
+# ─────────────────────────────────────────
+# BOOKS
+# ─────────────────────────────────────────
+
+### List all indexed books
+GET {{baseUrl}}/api/books
+Authorization: Bearer {{token}}
+
+# ─────────────────────────────────────────
+# QUERY — RAG hybrid search
+# ─────────────────────────────────────────
+
+### Disease query (English, all books)
+POST {{baseUrl}}/api/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "pneumonia treatment guidelines",
+  "queryType": "Disease",
+  "language": "Both",
+  "webSearchEnabled": false
+}
+
+### Symptoms query filtered to a specific book
+POST {{baseUrl}}/api/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "chest pain shortness of breath",
+  "queryType": "Symptoms",
+  "language": "English",
+  "bookIds": ["smoke-test-v1"],
+  "webSearchEnabled": false
+}
+
+### Treatment query with web search fallback
+POST {{baseUrl}}/api/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "лечение на хипертония",
+  "queryType": "Treatment",
+  "language": "Bulgarian",
+  "webSearchEnabled": true
+}
+
+# ─────────────────────────────────────────
+# DICTIONARY
+# ─────────────────────────────────────────
+
+### Lookup by ICD-10 code
+GET {{baseUrl}}/api/dictionary/J18.9
+Authorization: Bearer {{token}}
+
+### Lookup hypertension
+GET {{baseUrl}}/api/dictionary/I10
+Authorization: Bearer {{token}}
+
+### Lookup type 2 diabetes
+GET {{baseUrl}}/api/dictionary/E11
+Authorization: Bearer {{token}}
+
+### Search by name (English)
+GET {{baseUrl}}/api/dictionary/search?q=pneumonia
+Authorization: Bearer {{token}}
+
+### Search by name (Bulgarian)
+GET {{baseUrl}}/api/dictionary/search?q=хипертония
+Authorization: Bearer {{token}}
+
+# ─────────────────────────────────────────
+# OBSERVABILITY & DOCS
+# ─────────────────────────────────────────
+
+### Health check
+GET {{baseUrl}}/health
+
+### Prometheus metrics (no auth required)
+GET {{baseUrl}}/metrics
+
+### Scalar API docs (open in browser)
+### {{baseUrl}}/scalar/v1

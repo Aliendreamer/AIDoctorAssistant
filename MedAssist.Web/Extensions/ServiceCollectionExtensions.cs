@@ -1,0 +1,148 @@
+using FastEndpoints;
+using FastEndpoints.Security;
+using FastEndpoints.Swagger;
+using MedAssist.AI.Dictionary;
+using MedAssist.AI.Embedding;
+using MedAssist.AI.VectorStore;
+using MedAssist.Shared.Interfaces;
+using MedAssist.Web.Services;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Qdrant.Client;
+
+namespace MedAssist.Web.Extensions;
+
+internal static class ServiceCollectionExtensions
+{
+    internal static IServiceCollection AddDataServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        var dbPath = configuration["Database:Path"] ?? "medassist.db";
+
+        services.AddSingleton(_ => new BookCatalogService(dbPath));
+        services.AddSingleton<IMedicalDictionary>(_ => new MedicalDictionaryService(dbPath));
+        services.AddSingleton<IBM25VocabStore>(_ => new BM25VocabService(dbPath));
+
+        return services;
+    }
+
+    internal static IServiceCollection AddAiServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        var modelsPath = configuration["Models:Path"] ?? "models";
+        var modelDir = Path.Combine(modelsPath, "multilingual-e5-large");
+
+        services.AddHttpClient<ModelInitializer>()
+            .AddStandardResilienceHandler(options =>
+            {
+                options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(15);
+                options.AttemptTimeout.Timeout = TimeSpan.FromMinutes(10);
+                options.Retry.MaxRetryAttempts = 2;
+                options.Retry.Delay = TimeSpan.FromSeconds(5);
+            });
+        services.AddSingleton<IEmbedder>(_ => new MultilingualE5Embedder(modelDir));
+
+        var qdrantEndpoint = configuration["VectorStore:Qdrant:Endpoint"] ?? "http://localhost:6333";
+        var qdrantUri = new Uri(qdrantEndpoint);
+        services.AddSingleton(_ => new QdrantClient(qdrantUri.Host, qdrantUri.Port));
+        services.AddSingleton<IVectorStore, QdrantVectorStore>();
+
+        services.AddSingleton<ISparseVectorizer, SparseVectorizer>();
+
+        services.AddSingleton(sp => AI.Kernel.KernelFactory.Build(
+            configuration,
+            sp.GetRequiredService<IMedicalDictionary>(),
+            sp.GetRequiredService<IVectorStore>(),
+            sp.GetRequiredService<IEmbedder>(),
+            sp.GetRequiredService<ISparseVectorizer>()));
+
+        return services;
+    }
+
+    internal static IServiceCollection AddQueryServices(this IServiceCollection services)
+    {
+        services.AddScoped<QueryService>();
+        services.AddHttpClient<QueryService>()
+            .AddStandardResilienceHandler(options =>
+            {
+                options.TotalRequestTimeout.Timeout = TimeSpan.FromSeconds(15);
+                options.AttemptTimeout.Timeout = TimeSpan.FromSeconds(5);
+                options.Retry.MaxRetryAttempts = 2;
+                options.Retry.Delay = TimeSpan.FromMilliseconds(300);
+            });
+        services.AddFastEndpoints();
+        return services;
+    }
+
+    internal static IServiceCollection AddAuth(this IServiceCollection services, IConfiguration configuration)
+    {
+        var secretKey = configuration["Auth:Jwt:SecretKey"]
+            ?? throw new InvalidOperationException("Auth:Jwt:SecretKey is not configured");
+        var issuer = configuration["Auth:Jwt:Issuer"] ?? "medassist";
+        var audience = configuration["Auth:Jwt:Audience"] ?? "medassist-api";
+
+        services.AddAuthenticationJwtBearer(
+            signingOptions: s => { s.SigningKey = secretKey; },
+            bearerOptions: o =>
+            {
+                o.TokenValidationParameters.ValidIssuer = issuer;
+                o.TokenValidationParameters.ValidAudience = audience;
+                o.TokenValidationParameters.ValidateIssuer = true;
+                o.TokenValidationParameters.ValidateAudience = true;
+            });
+
+        services.AddAuthorization();
+        return services;
+    }
+
+    internal static IServiceCollection AddApiDocs(this IServiceCollection services)
+    {
+        services.SwaggerDocument(o =>
+        {
+            o.DocumentSettings = s =>
+            {
+                s.Title = "MedAssist API";
+                s.Description = "Bilingual EN/BG RAG medical assistant — hybrid dense+sparse search";
+                s.Version = "v1";
+            };
+        });
+
+        return services;
+    }
+
+    internal static IServiceCollection AddObservability(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
+    {
+        services.AddHealthChecks();
+
+        var serviceName = configuration["OpenTelemetry:ServiceName"] ?? "medassist-web";
+        var otlpEndpoint = configuration["OpenTelemetry:Endpoint"] ?? "http://localhost:4317";
+
+        var resource = ResourceBuilder.CreateDefault().AddService(
+            serviceName: serviceName,
+            serviceVersion: typeof(ServiceCollectionExtensions).Assembly.GetName().Version?.ToString() ?? "0.0.0");
+
+        services.AddOpenTelemetry()
+            .WithMetrics(metrics => metrics
+                .SetResourceBuilder(resource)
+                .AddAspNetCoreInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddMeter("MedAssist.Web")
+                .AddPrometheusExporter()
+                .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)))
+            .WithTracing(tracing =>
+            {
+                tracing
+                    .SetResourceBuilder(resource)
+                    .AddSource("MedAssist.Web")
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+
+                if (environment.IsDevelopment())
+                {
+                    tracing.AddConsoleExporter();
+                }
+            });
+
+        return services;
+    }
+}

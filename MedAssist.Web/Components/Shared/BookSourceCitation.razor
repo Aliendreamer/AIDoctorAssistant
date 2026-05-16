@@ -1,0 +1,26 @@
+@using MedAssist.Shared.Models
+
+<div class="citation book-citation">
+    <span class="badge bg-secondary me-2">📚 Book</span>
+    <strong>@Citation.BookTitle</strong>
+    @if (!string.IsNullOrWhiteSpace(Citation.Author))
+    {
+        <span> — @Citation.Author</span>
+    }
+    @if (!string.IsNullOrWhiteSpace(Citation.ChapterTitle))
+    {
+        <span class="text-muted"> | @Citation.ChapterTitle</span>
+    }
+    @if (!string.IsNullOrWhiteSpace(Citation.SectionTitle))
+    {
+        <span class="text-muted"> &gt; @Citation.SectionTitle</span>
+    }
+    @if (Citation.PageStart.HasValue)
+    {
+        <span class="text-muted"> | pp. @Citation.PageStart–@Citation.PageEnd</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SourceCitation Citation { get; set; } = default!;
+}

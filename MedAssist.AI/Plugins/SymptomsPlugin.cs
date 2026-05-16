@@ -1,0 +1,21 @@
+using MedAssist.Shared.Interfaces;
+using MedAssist.Shared.Models;
+using Microsoft.SemanticKernel;
+
+namespace MedAssist.AI.Plugins;
+
+public sealed class SymptomsPlugin : RagPluginBase
+{
+    public SymptomsPlugin(IMedicalDictionary dictionary, IVectorStore vectorStore, IEmbedder embedder, ISparseVectorizer sparseVectorizer)
+        : base(dictionary, vectorStore, embedder, sparseVectorizer)
+    {
+    }
+
+    [KernelFunction, System.ComponentModel.Description("Find likely diagnoses or causes for a given set of symptoms.")]
+    public Task<QueryResult> SearchAsync(
+        [System.ComponentModel.Description("The symptoms to look up")] string query,
+        [System.ComponentModel.Description("Language filter: both, en, bg")] string language = "both",
+        [System.ComponentModel.Description("Specific book IDs to search (null = all books)")] string[]? bookIds = null,
+        CancellationToken cancellationToken = default)
+        => base.ExecuteSearchAsync(query, language, bookIds, cancellationToken);
+}
