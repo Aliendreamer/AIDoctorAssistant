@@ -28,6 +28,46 @@ Content-Type: application/json
 }
 
 # ─────────────────────────────────────────
+# ADMIN — book management
+# ─────────────────────────────────────────
+
+### Upload a book (PDF) — returns 200 with id + bookId
+POST {{baseUrl}}/api/admin/books/upload
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----Boundary
+
+------Boundary
+Content-Disposition: form-data; name="BookId"
+
+my-book-v1
+------Boundary
+Content-Disposition: form-data; name="Title"
+
+My Medical Book
+------Boundary
+Content-Disposition: form-data; name="Author"
+
+Author Name
+------Boundary
+Content-Disposition: form-data; name="Language"
+
+en
+------Boundary
+Content-Disposition: form-data; name="Edition"
+
+1st
+------Boundary
+Content-Disposition: form-data; name="File"; filename="my-book.pdf"
+Content-Type: application/pdf
+
+< ./my-book.pdf
+------Boundary--
+
+### Trigger indexing — use id from upload response
+POST {{baseUrl}}/api/admin/index?id=1
+Authorization: Bearer {{token}}
+
+# ─────────────────────────────────────────
 # BOOKS
 # ─────────────────────────────────────────
 
