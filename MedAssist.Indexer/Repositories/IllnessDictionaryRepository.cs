@@ -1,94 +1,62 @@
-using MedAssist.Indexer.Database;
+using MedAssist.Data;
+using MedAssist.Data.Entities;
 using MedAssist.Shared.Models;
-using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Indexer.Repositories;
 
 public sealed class IllnessDictionaryRepository
 {
-    private readonly DbInitializer _db;
+    private readonly MedAssistDbContext _db;
 
-    public IllnessDictionaryRepository(DbInitializer db) => _db = db;
+    public IllnessDictionaryRepository(MedAssistDbContext db) => _db = db;
 
     public async Task AddAsync(string icdCode, string nameEn, string nameBg, CancellationToken cancellationToken = default)
     {
-        await using var connection = _db.CreateConnection();
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO illnesses (icd_code, name_en, name_bg)
-            VALUES ($icdCode, $nameEn, $nameBg)
-            ON CONFLICT(icd_code) DO UPDATE SET
-                name_en = excluded.name_en,
-                name_bg = excluded.name_bg;
-            """;
-        cmd.Parameters.AddWithValue("$icdCode", icdCode);
-        cmd.Parameters.AddWithValue("$nameEn", nameEn);
-        cmd.Parameters.AddWithValue("$nameBg", nameBg);
-        await cmd.ExecuteNonQueryAsync(cancellationToken);
+        var icdUpper = icdCode.ToUpperInvariant();
+        var existing = await _db.Illnesses
+            .FirstOrDefaultAsync(i => i.IcdCode.ToUpper() == icdUpper, cancellationToken);
+
+        if (existing is not null)
+        {
+            existing.NameEn = nameEn;
+            existing.NameBg = nameBg;
+        }
+        else
+        {
+            _db.Illnesses.Add(new IllnessEntity
+            {
+                IcdCode = icdCode,
+                NameEn = nameEn,
+                NameBg = nameBg
+            });
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<IllnessEntry>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = _db.CreateConnection();
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT id, icd_code, name_en, name_bg FROM illnesses ORDER BY name_en;";
+        var illnesses = await _db.Illnesses
+            .Include(i => i.Aliases)
+            .OrderBy(i => i.NameEn)
+            .ToListAsync(cancellationToken);
 
-        var results = new List<IllnessEntry>();
-        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            var id = Guid.Parse(reader.GetString(0));
-            var aliases = await GetAliasesAsync(connection, id.ToString(), cancellationToken);
-            results.Add(new IllnessEntry
-            {
-                Id = id,
-                IcdCode = reader.GetString(1),
-                NameEn = reader.GetString(2),
-                NameBg = reader.GetString(3),
-                Aliases = aliases
-            });
-        }
-
-        return results;
+        return illnesses.Select(MapToEntry).ToList();
     }
 
     public async Task<IllnessEntry?> FindByNameAsync(string name, CancellationToken cancellationToken = default)
     {
-        await using var connection = _db.CreateConnection();
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT i.id, i.icd_code, i.name_en, i.name_bg
-            FROM illnesses i
-            WHERE lower(i.name_en) = lower($name)
-               OR lower(i.name_bg) = lower($name)
-               OR EXISTS (
-                   SELECT 1 FROM illness_aliases a
-                   WHERE a.illness_id = i.id AND lower(a.alias) = lower($name)
-               )
-            LIMIT 1;
-            """;
-        cmd.Parameters.AddWithValue("$name", name);
+        var nameLower = name.ToLowerInvariant();
+        var illness = await _db.Illnesses
+            .Include(i => i.Aliases)
+            .FirstOrDefaultAsync(i =>
+                i.NameEn.ToLower() == nameLower ||
+                i.NameBg.ToLower() == nameLower ||
+                i.Aliases.Any(a => a.Alias.ToLower() == nameLower),
+                cancellationToken);
 
-        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-        if (!await reader.ReadAsync(cancellationToken))
-        {
-            return null;
-        }
-
-        var id = Guid.Parse(reader.GetString(0));
-        var icdCode = reader.GetString(1);
-        var nameEn = reader.GetString(2);
-        var nameBg = reader.GetString(3);
-        var aliases = await GetAliasesAsync(connection, id.ToString(), cancellationToken);
-
-        return new IllnessEntry
-        {
-            Id = id,
-            IcdCode = icdCode,
-            NameEn = nameEn,
-            NameBg = nameBg,
-            Aliases = aliases
-        };
+        return illness is null ? null : MapToEntry(illness);
     }
 
     public async Task<IReadOnlyList<string>> ExpandQueryAsync(string query, CancellationToken cancellationToken = default)
@@ -110,22 +78,12 @@ public sealed class IllnessDictionaryRepository
         return [.. terms];
     }
 
-    private static async Task<IReadOnlyList<string>> GetAliasesAsync(
-        SqliteConnection connection,
-        string illnessId,
-        CancellationToken cancellationToken)
+    private static IllnessEntry MapToEntry(IllnessEntity illness) => new()
     {
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT alias FROM illness_aliases WHERE illness_id = $illnessId;";
-        cmd.Parameters.AddWithValue("$illnessId", illnessId);
-
-        var aliases = new List<string>();
-        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            aliases.Add(reader.GetString(0));
-        }
-
-        return aliases;
-    }
+        Id = illness.Id,
+        IcdCode = illness.IcdCode,
+        NameEn = illness.NameEn,
+        NameBg = illness.NameBg,
+        Aliases = illness.Aliases.Select(a => a.Alias).ToArray()
+    };
 }

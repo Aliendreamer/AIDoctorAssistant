@@ -33,6 +33,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+await app.MigrateDbAsync();
 await app.EnsureModelsReadyAsync();
 
 app.UseOpenTelemetryPrometheusScrapingEndpoint();

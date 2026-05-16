@@ -1,0 +1,18 @@
+using MedAssist.Data.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace MedAssist.Data;
+
+public sealed class MedAssistDbContext : DbContext
+{
+    public MedAssistDbContext(DbContextOptions<MedAssistDbContext> options) : base(options) { }
+
+    public DbSet<BookEntity> Books => Set<BookEntity>();
+    public DbSet<IllnessEntity> Illnesses => Set<IllnessEntity>();
+    public DbSet<IllnessAliasEntity> IllnessAliases => Set<IllnessAliasEntity>();
+    public DbSet<Bm25VocabEntity> Bm25Vocab => Set<Bm25VocabEntity>();
+    public DbSet<IngestionCheckpointEntity> IngestionCheckpoints => Set<IngestionCheckpointEntity>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+        => modelBuilder.ApplyConfigurationsFromAssembly(typeof(MedAssistDbContext).Assembly);
+}

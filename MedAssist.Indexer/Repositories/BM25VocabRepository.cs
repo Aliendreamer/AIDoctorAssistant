@@ -1,42 +1,36 @@
-using MedAssist.Indexer.Database;
+using MedAssist.Data;
+using MedAssist.Data.Entities;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
-using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Indexer.Repositories;
 
 public sealed class BM25VocabRepository : IBM25VocabStore
 {
-    private readonly DbInitializer _db;
+    private readonly MedAssistDbContext _db;
 
-    public BM25VocabRepository(DbInitializer db) => _db = db;
+    public BM25VocabRepository(MedAssistDbContext db) => _db = db;
 
     public async Task<BM25VocabSnapshot> LoadAsync(CancellationToken cancellationToken = default)
     {
-        using var conn = _db.CreateConnection();
+        var totalDocs = await _db.Bm25Vocab
+            .MaxAsync(v => (int?)v.TotalDocuments, cancellationToken) ?? 0;
 
-        int totalDocs;
-        using (var cmd = conn.CreateCommand())
+        var vocab = await _db.Bm25Vocab
+            .Where(v => v.DocumentFrequency >= 2)
+            .OrderBy(v => v.Id)
+            .Select(v => new { v.Id, v.Term, v.DocumentFrequency })
+            .ToListAsync(cancellationToken);
+
+        var termIds = new Dictionary<string, uint>(vocab.Count);
+        var idfWeights = new Dictionary<uint, float>(vocab.Count);
+
+        foreach (var entry in vocab)
         {
-            cmd.CommandText = "SELECT COALESCE(MAX(total_documents), 0) FROM bm25_vocab";
-            totalDocs = (int)(long)(await cmd.ExecuteScalarAsync(cancellationToken))!;
-        }
-
-        var termIds = new Dictionary<string, uint>();
-        var idfWeights = new Dictionary<uint, float>();
-
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "SELECT id, term, document_frequency FROM bm25_vocab WHERE document_frequency >= 2 ORDER BY id";
-            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                var termId = (uint)reader.GetInt64(0);
-                var term = reader.GetString(1);
-                var df = reader.GetInt32(2);
-                termIds[term] = termId;
-                idfWeights[termId] = ComputeIdf(df, totalDocs);
-            }
+            var termId = (uint)entry.Id;
+            termIds[entry.Term] = termId;
+            idfWeights[termId] = ComputeIdf(entry.DocumentFrequency, totalDocs);
         }
 
         return new BM25VocabSnapshot(termIds, idfWeights, totalDocs);
@@ -47,53 +41,62 @@ public sealed class BM25VocabRepository : IBM25VocabStore
         int totalDocs,
         CancellationToken cancellationToken = default)
     {
-        using var conn = _db.CreateConnection();
-        using var tx = conn.BeginTransaction();
+        await using var tx = await _db.Database.BeginTransactionAsync(cancellationToken);
 
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.Transaction = tx;
-            cmd.CommandText = "UPDATE bm25_vocab SET total_documents = @n, updated_at = datetime('now')";
-            cmd.Parameters.AddWithValue("@n", totalDocs);
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
-        }
+        await _db.Bm25Vocab.ExecuteUpdateAsync(
+            s => s.SetProperty(v => v.TotalDocuments, totalDocs)
+                   .SetProperty(v => v.UpdatedAt, DateTimeOffset.UtcNow),
+            cancellationToken);
+
+        var termKeys = termDfs.Keys.ToList();
+        var existingMap = await _db.Bm25Vocab
+            .AsNoTracking()
+            .Where(v => termKeys.Contains(v.Term))
+            .ToDictionaryAsync(v => v.Term, cancellationToken);
+
+        var toUpdate = new List<Bm25VocabEntity>();
+        var toAdd = new List<Bm25VocabEntity>();
 
         foreach (var (term, df) in termDfs)
         {
-            using var cmd = conn.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = """
-                INSERT INTO bm25_vocab (term, document_frequency, total_documents, updated_at)
-                VALUES (@term, @df, @n, datetime('now'))
-                ON CONFLICT(term) DO UPDATE SET
-                    document_frequency = document_frequency + @df,
-                    total_documents = @n,
-                    updated_at = datetime('now')
-                """;
-            cmd.Parameters.AddWithValue("@term", term);
-            cmd.Parameters.AddWithValue("@df", df);
-            cmd.Parameters.AddWithValue("@n", totalDocs);
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
+            if (existingMap.TryGetValue(term, out var existing))
+            {
+                existing.DocumentFrequency += df;
+                existing.TotalDocuments = totalDocs;
+                existing.UpdatedAt = DateTimeOffset.UtcNow;
+                toUpdate.Add(existing);
+            }
+            else
+            {
+                toAdd.Add(new Bm25VocabEntity
+                {
+                    Term = term,
+                    DocumentFrequency = df,
+                    TotalDocuments = totalDocs,
+                    UpdatedAt = DateTimeOffset.UtcNow
+                });
+            }
         }
 
-        tx.Commit();
+        if (toUpdate.Count > 0)
+        {
+            _db.Bm25Vocab.UpdateRange(toUpdate);
+        }
+
+        if (toAdd.Count > 0)
+        {
+            _db.Bm25Vocab.AddRange(toAdd);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
     }
 
-    public async Task<int> GetTotalDocumentsAsync(CancellationToken cancellationToken = default)
-    {
-        using var conn = _db.CreateConnection();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COALESCE(MAX(total_documents), 0) FROM bm25_vocab";
-        return (int)(long)(await cmd.ExecuteScalarAsync(cancellationToken))!;
-    }
+    public async Task<int> GetTotalDocumentsAsync(CancellationToken cancellationToken = default) =>
+        await _db.Bm25Vocab.MaxAsync(v => (int?)v.TotalDocuments, cancellationToken) ?? 0;
 
-    public async Task ClearAsync(CancellationToken cancellationToken = default)
-    {
-        using var conn = _db.CreateConnection();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM bm25_vocab";
-        await cmd.ExecuteNonQueryAsync(cancellationToken);
-    }
+    public async Task ClearAsync(CancellationToken cancellationToken = default) =>
+        await _db.Bm25Vocab.ExecuteDeleteAsync(cancellationToken);
 
     private static float ComputeIdf(int df, int n) =>
         n > 0 ? MathF.Log(1f + (n - df + 0.5f) / (df + 0.5f)) : 0f;

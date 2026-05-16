@@ -12,17 +12,18 @@ services:
       - AI__ModelProvider=ollama
       - AI__Ollama__Endpoint=http://ollama:11434
       - AI__Ollama__ModelName=qwen2.5:7b
-      - Database__Path=/data/medassist.db
+      - Database__ConnectionString=Host=postgres;Database=medassist;Username=medassist;Password=medassist
       - Models__Path=/models
       - OpenTelemetry__Endpoint=http://otel-collector:4317
       - OpenTelemetry__ServiceName=medassist-web
       - WebSearch__Endpoint=http://searxng:8080
     volumes:
-      - medassist-db:/data
       - medassist-models:/models
       - ./books/raw:/books/raw:ro
       - ./books/processed:/books/processed:ro
     depends_on:
+      postgres:
+        condition: service_healthy
       qdrant:
         condition: service_healthy
       ollama:
@@ -39,20 +40,37 @@ services:
     environment:
       - DOTNET_ENVIRONMENT=Production
       - VectorStore__Qdrant__Endpoint=http://qdrant:6334
-      - Database__Path=/data/medassist.db
+      - Database__ConnectionString=Host=postgres;Database=medassist;Username=medassist;Password=medassist
       - Models__Path=/models
     volumes:
-      - medassist-db:/data
       - medassist-models:/models
       - ./books/raw:/books/raw
       - ./books/processed:/books/processed
     depends_on:
+      postgres:
+        condition: service_healthy
       qdrant:
         condition: service_healthy
     networks:
       - medassist-net
     profiles:
       - indexer
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=medassist
+      - POSTGRES_USER=medassist
+      - POSTGRES_PASSWORD=medassist
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medassist -d medassist"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medassist-net
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -159,12 +177,12 @@ services:
       - medassist-net
 
 volumes:
+  postgres-data:
   qdrant-data:
   ollama-models:
   prometheus-data:
   grafana-data:
   tempo-data:
-  medassist-db:
   medassist-models:
 
 networks:

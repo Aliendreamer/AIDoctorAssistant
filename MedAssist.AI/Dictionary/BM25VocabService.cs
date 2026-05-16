@@ -1,43 +1,38 @@
+using MedAssist.Data;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
-using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.AI.Dictionary;
 
 public sealed class BM25VocabService : IBM25VocabStore
 {
-    private readonly string _connectionString;
+    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
 
-    public BM25VocabService(string databasePath)
-        => _connectionString = $"Data Source={databasePath};Mode=ReadOnly";
+    public BM25VocabService(IDbContextFactory<MedAssistDbContext> dbFactory)
+        => _dbFactory = dbFactory;
 
     public async Task<BM25VocabSnapshot> LoadAsync(CancellationToken cancellationToken = default)
     {
-        using var conn = new SqliteConnection(_connectionString);
-        conn.Open();
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-        int totalDocs;
-        using (var cmd = conn.CreateCommand())
+        var totalDocs = await db.Bm25Vocab
+            .MaxAsync(v => (int?)v.TotalDocuments, cancellationToken) ?? 0;
+
+        var vocab = await db.Bm25Vocab
+            .Where(v => v.DocumentFrequency >= 2)
+            .OrderBy(v => v.Id)
+            .Select(v => new { v.Id, v.Term, v.DocumentFrequency })
+            .ToListAsync(cancellationToken);
+
+        var termIds = new Dictionary<string, uint>(vocab.Count);
+        var idfWeights = new Dictionary<uint, float>(vocab.Count);
+
+        foreach (var entry in vocab)
         {
-            cmd.CommandText = "SELECT COALESCE(MAX(total_documents), 0) FROM bm25_vocab";
-            totalDocs = (int)(long)(await cmd.ExecuteScalarAsync(cancellationToken))!;
-        }
-
-        var termIds = new Dictionary<string, uint>();
-        var idfWeights = new Dictionary<uint, float>();
-
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = "SELECT id, term, document_frequency FROM bm25_vocab WHERE document_frequency >= 2 ORDER BY id";
-            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                var termId = (uint)reader.GetInt64(0);
-                var term = reader.GetString(1);
-                var df = reader.GetInt32(2);
-                termIds[term] = termId;
-                idfWeights[termId] = ComputeIdf(df, totalDocs);
-            }
+            var termId = (uint)entry.Id;
+            termIds[entry.Term] = termId;
+            idfWeights[termId] = ComputeIdf(entry.DocumentFrequency, totalDocs);
         }
 
         return new BM25VocabSnapshot(termIds, idfWeights, totalDocs);

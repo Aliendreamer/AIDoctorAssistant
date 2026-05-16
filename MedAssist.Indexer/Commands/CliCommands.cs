@@ -1,11 +1,12 @@
 using MedAssist.AI.Embedding;
 using MedAssist.AI.Extensions;
 using MedAssist.AI.VectorStore;
-using MedAssist.Indexer.Database;
+using MedAssist.Data;
 using MedAssist.Indexer.Ingestion;
 using MedAssist.Indexer.Repositories;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Qdrant.Client;
 
@@ -20,12 +21,17 @@ internal static class CliCommands
             .AddEnvironmentVariables()
             .Build();
 
-        var dbPath = config["Database:Path"] ?? "medassist.db";
+        var connectionString = config["Database:ConnectionString"]
+            ?? throw new InvalidOperationException("Database:ConnectionString is not configured");
         var qdrantEndpoint = config["VectorStore:Qdrant:Endpoint"] ?? "http://localhost:6333";
         var modelsPath = config["Models:Path"] ?? "models";
 
-        var db = new DbInitializer(dbPath);
-        db.Initialize();
+        var dbOptions = new DbContextOptionsBuilder<MedAssistDbContext>()
+            .UseNpgsql(connectionString)
+            .Options;
+
+        await using var db = new MedAssistDbContext(dbOptions);
+        await db.Database.MigrateAsync();
 
         switch (args[0])
         {
@@ -56,7 +62,7 @@ internal static class CliCommands
         }
     }
 
-    private static async Task IndexAsync(string[] args, DbInitializer db, string qdrantEndpoint, string modelsPath)
+    private static async Task IndexAsync(string[] args, MedAssistDbContext db, string qdrantEndpoint, string modelsPath)
     {
         var parsed = ParseArgs(args[1..]);
         if (!parsed.TryGetValue("--book", out var bookFile) ||
@@ -108,7 +114,7 @@ internal static class CliCommands
         Console.WriteLine($"Done indexing: {bookId}");
     }
 
-    private static async Task RebuildVocabAsync(DbInitializer db, string qdrantEndpoint)
+    private static async Task RebuildVocabAsync(MedAssistDbContext db, string qdrantEndpoint)
     {
         var qdrantUri = new Uri(qdrantEndpoint);
         var qdrantClient = new QdrantClient(qdrantUri.Host, qdrantUri.Port);
@@ -147,7 +153,7 @@ internal static class CliCommands
         Console.WriteLine($"Vocabulary rebuilt from {totalScrolled} chunks.");
     }
 
-    private static async Task DictionaryAddAsync(string[] args, DbInitializer db)
+    private static async Task DictionaryAddAsync(string[] args, MedAssistDbContext db)
     {
         var parsed = ParseArgs(args[2..]);
         if (!parsed.TryGetValue("--icd", out var icd) ||

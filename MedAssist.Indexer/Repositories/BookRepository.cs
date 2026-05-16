@@ -1,78 +1,71 @@
-using MedAssist.Indexer.Database;
+using MedAssist.Data;
+using MedAssist.Data.Entities;
 using MedAssist.Shared.Models;
-using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Indexer.Repositories;
 
 public sealed class BookRepository
 {
-    private readonly DbInitializer _db;
+    private readonly MedAssistDbContext _db;
 
-    public BookRepository(DbInitializer db) => _db = db;
+    public BookRepository(MedAssistDbContext db) => _db = db;
 
     public async Task UpsertAsync(BookInfo book, CancellationToken cancellationToken = default)
     {
-        await using var connection = _db.CreateConnection();
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO books (id, title, author, language, edition, total_chunks, status, indexed_at)
-            VALUES ($id, $title, $author, $language, $edition, $totalChunks, $status, $indexedAt)
-            ON CONFLICT(id) DO UPDATE SET
-                title        = excluded.title,
-                author       = excluded.author,
-                language     = excluded.language,
-                edition      = excluded.edition,
-                total_chunks = excluded.total_chunks,
-                status       = excluded.status,
-                indexed_at   = excluded.indexed_at;
-            """;
-        cmd.Parameters.AddWithValue("$id", book.Id);
-        cmd.Parameters.AddWithValue("$title", book.Title);
-        cmd.Parameters.AddWithValue("$author", book.Author);
-        cmd.Parameters.AddWithValue("$language", book.Language);
-        cmd.Parameters.AddWithValue("$edition", book.Edition);
-        cmd.Parameters.AddWithValue("$totalChunks", book.TotalChunks);
-        cmd.Parameters.AddWithValue("$status", book.Status.ToString().ToLowerInvariant());
-        cmd.Parameters.AddWithValue("$indexedAt", book.IndexedAt?.ToString("O") ?? (object)DBNull.Value);
-        await cmd.ExecuteNonQueryAsync(cancellationToken);
+        var existing = await _db.Books.FindAsync([book.Id], cancellationToken);
+        if (existing is not null)
+        {
+            existing.Title = book.Title;
+            existing.Author = book.Author;
+            existing.Language = book.Language;
+            existing.Edition = book.Edition;
+            existing.TotalChunks = book.TotalChunks;
+            existing.Status = book.Status.ToString().ToLowerInvariant();
+            existing.IndexedAt = book.IndexedAt;
+        }
+        else
+        {
+            _db.Books.Add(new BookEntity
+            {
+                Id = book.Id,
+                Title = book.Title,
+                Author = book.Author,
+                Language = book.Language,
+                Edition = book.Edition,
+                TotalChunks = book.TotalChunks,
+                Status = book.Status.ToString().ToLowerInvariant(),
+                IndexedAt = book.IndexedAt
+            });
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<BookInfo>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = _db.CreateConnection();
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT id, title, author, language, edition, total_chunks, status, indexed_at FROM books ORDER BY title;";
+        var books = await _db.Books
+            .OrderBy(b => b.Title)
+            .ToListAsync(cancellationToken);
 
-        var results = new List<BookInfo>();
-        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            results.Add(MapRow(reader));
-        }
-
-        return results;
+        return books.Select(MapToInfo).ToList();
     }
 
     public async Task<BookInfo?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
-        await using var connection = _db.CreateConnection();
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT id, title, author, language, edition, total_chunks, status, indexed_at FROM books WHERE id = $id;";
-        cmd.Parameters.AddWithValue("$id", id);
-
-        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken) ? MapRow(reader) : null;
+        var entity = await _db.Books.FindAsync([id], cancellationToken);
+        return entity is null ? null : MapToInfo(entity);
     }
 
-    private static BookInfo MapRow(SqliteDataReader reader) => new()
+    private static BookInfo MapToInfo(BookEntity b) => new()
     {
-        Id = reader.GetString(0),
-        Title = reader.GetString(1),
-        Author = reader.GetString(2),
-        Language = reader.GetString(3),
-        Edition = reader.GetString(4),
-        TotalChunks = reader.GetInt32(5),
-        Status = Enum.Parse<BookStatus>(reader.GetString(6), ignoreCase: true),
-        IndexedAt = reader.IsDBNull(7) ? null : DateTimeOffset.Parse(reader.GetString(7))
+        Id = b.Id,
+        Title = b.Title,
+        Author = b.Author,
+        Language = b.Language,
+        Edition = b.Edition,
+        TotalChunks = b.TotalChunks,
+        Status = Enum.Parse<BookStatus>(b.Status, ignoreCase: true),
+        IndexedAt = b.IndexedAt
     };
 }

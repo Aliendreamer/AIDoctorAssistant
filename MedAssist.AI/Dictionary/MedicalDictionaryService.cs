@@ -1,51 +1,39 @@
+using MedAssist.Data;
+using MedAssist.Data.Entities;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
-using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.AI.Dictionary;
 
 public sealed class MedicalDictionaryService : IMedicalDictionary
 {
-    private readonly string _connectionString;
+    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
 
-    public MedicalDictionaryService(string databasePath)
-    {
-        _connectionString = $"Data Source={databasePath};Mode=ReadOnly";
-    }
+    public MedicalDictionaryService(IDbContextFactory<MedAssistDbContext> dbFactory)
+        => _dbFactory = dbFactory;
 
     public async Task<IReadOnlyList<string>> ExpandQueryAsync(string query, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var queryLower = query.ToLowerInvariant();
 
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT i.name_en, i.name_bg, a.alias
-            FROM illnesses i
-            LEFT JOIN illness_aliases a ON a.illness_id = i.id
-            WHERE lower(i.name_en) = lower($query)
-               OR lower(i.name_bg) = lower($query)
-               OR lower(a.alias) = lower($query);
-            """;
-        cmd.Parameters.AddWithValue("$query", query);
+        var illnesses = await db.Illnesses
+            .Include(i => i.Aliases)
+            .Where(i =>
+                i.NameEn.ToLower() == queryLower ||
+                i.NameBg.ToLower() == queryLower ||
+                i.Aliases.Any(a => a.Alias.ToLower() == queryLower))
+            .ToListAsync(cancellationToken);
 
         var terms = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { query };
-        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
+        foreach (var illness in illnesses)
         {
-            if (!reader.IsDBNull(0))
+            terms.Add(illness.NameEn);
+            terms.Add(illness.NameBg);
+            foreach (var alias in illness.Aliases)
             {
-                terms.Add(reader.GetString(0));
-            }
-
-            if (!reader.IsDBNull(1))
-            {
-                terms.Add(reader.GetString(1));
-            }
-
-            if (!reader.IsDBNull(2))
-            {
-                terms.Add(reader.GetString(2));
+                terms.Add(alias.Alias);
             }
         }
 
@@ -54,70 +42,42 @@ public sealed class MedicalDictionaryService : IMedicalDictionary
 
     public async Task<IllnessEntry?> GetByIcdAsync(string icdCode, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var icdUpper = icdCode.ToUpperInvariant();
 
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT i.id, i.icd_code, i.name_en, i.name_bg,
-                   group_concat(a.alias, '|') AS aliases
-            FROM illnesses i
-            LEFT JOIN illness_aliases a ON a.illness_id = i.id
-            WHERE upper(i.icd_code) = upper($icd)
-            GROUP BY i.id;
-            """;
-        cmd.Parameters.AddWithValue("$icd", icdCode);
+        var illness = await db.Illnesses
+            .Include(i => i.Aliases)
+            .FirstOrDefaultAsync(i => i.IcdCode.ToUpper() == icdUpper, cancellationToken);
 
-        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-        if (!await reader.ReadAsync(cancellationToken))
-        {
-            return null;
-        }
-
-        return ReadEntry(reader);
+        return illness is null ? null : MapToEntry(illness);
     }
 
     public async Task<IReadOnlyList<IllnessEntry>> SearchAsync(string query, CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var queryLower = query.ToLowerInvariant();
+        var queryUpper = query.ToUpperInvariant();
 
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT i.id, i.icd_code, i.name_en, i.name_bg,
-                   group_concat(a.alias, '|') AS aliases
-            FROM illnesses i
-            LEFT JOIN illness_aliases a ON a.illness_id = i.id
-            WHERE lower(i.name_en) LIKE '%' || lower($q) || '%'
-               OR lower(i.name_bg) LIKE '%' || lower($q) || '%'
-               OR upper(i.icd_code) LIKE upper($q) || '%'
-            GROUP BY i.id
-            ORDER BY i.name_en
-            LIMIT 50;
-            """;
-        cmd.Parameters.AddWithValue("$q", query);
+        var illnesses = await db.Illnesses
+            .Include(i => i.Aliases)
+            .Where(i =>
+                i.NameEn.ToLower().Contains(queryLower) ||
+                i.NameBg.ToLower().Contains(queryLower) ||
+                i.IcdCode.ToUpper().StartsWith(queryUpper))
+            .OrderBy(i => i.NameEn)
+            .Take(50)
+            .ToListAsync(cancellationToken);
 
-        var results = new List<IllnessEntry>();
-        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            results.Add(ReadEntry(reader));
-        }
-
-        return results;
+        return illnesses.Select(MapToEntry).ToList();
     }
 
-    private static IllnessEntry ReadEntry(SqliteDataReader reader)
-    {
-        string? aliasesRaw = reader.IsDBNull(4) ? null : reader.GetString(4);
-        string[] aliases = aliasesRaw?.Split('|', StringSplitOptions.RemoveEmptyEntries) ?? [];
-        return new IllnessEntry
+    private static IllnessEntry MapToEntry(IllnessEntity illness) =>
+        new()
         {
-            Id = Guid.Parse(reader.GetString(0)),
-            IcdCode = reader.GetString(1),
-            NameEn = reader.GetString(2),
-            NameBg = reader.GetString(3),
-            Aliases = aliases
+            Id = illness.Id,
+            IcdCode = illness.IcdCode,
+            NameEn = illness.NameEn,
+            NameBg = illness.NameBg,
+            Aliases = illness.Aliases.Select(a => a.Alias).ToArray()
         };
-    }
 }

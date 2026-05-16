@@ -79,6 +79,17 @@
     "icd",
     "icdCode",
 
+    "postgres",
+    "Postgres",
+    "postgresql",
+    "PostgreSQL",
+    "npgsql",
+    "Npgsql",
+    "dbcontext",
+    "DbContext",
+    "DbContextFactory",
+    "MigrateAsync",
+
     "SQLite",
     "Sqlite",
     "sqlite",
@@ -136,6 +147,9 @@
     "SemaphoreSlim",
 
     "Healthz",
-    "healthz"
+    "healthz",
+
+    "contentfiles",
+    "buildtransitive"
   ]
 }

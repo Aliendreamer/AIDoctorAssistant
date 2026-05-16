@@ -5,8 +5,10 @@ using MedAssist.AI.Dictionary;
 using MedAssist.AI.Embedding;
 using MedAssist.AI.Reranker;
 using MedAssist.AI.VectorStore;
+using MedAssist.Data;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Web.Services;
+using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -18,11 +20,15 @@ internal static class ServiceCollectionExtensions
 {
     internal static IServiceCollection AddDataServices(this IServiceCollection services, IConfiguration configuration)
     {
-        var dbPath = configuration["Database:Path"] ?? "medassist.db";
+        var connectionString = configuration["Database:ConnectionString"]
+            ?? throw new InvalidOperationException("Database:ConnectionString is not configured");
 
-        services.AddSingleton(_ => new BookCatalogService(dbPath));
-        services.AddSingleton<IMedicalDictionary>(_ => new MedicalDictionaryService(dbPath));
-        services.AddSingleton<IBM25VocabStore>(_ => new BM25VocabService(dbPath));
+        services.AddDbContextFactory<MedAssistDbContext>(options =>
+            options.UseNpgsql(connectionString));
+
+        services.AddSingleton<BookCatalogService>();
+        services.AddSingleton<IMedicalDictionary, MedicalDictionaryService>();
+        services.AddSingleton<IBM25VocabStore, BM25VocabService>();
 
         return services;
     }

@@ -1,42 +1,35 @@
+using MedAssist.Data;
 using MedAssist.Shared.Models;
-using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Web.Services;
 
 public sealed class BookCatalogService
 {
-    private readonly string _connectionString;
+    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
 
-    public BookCatalogService(string databasePath)
-    {
-        _connectionString = $"Data Source={databasePath};Mode=ReadOnly";
-    }
+    public BookCatalogService(IDbContextFactory<MedAssistDbContext> dbFactory)
+        => _dbFactory = dbFactory;
 
     public async Task<IReadOnlyList<BookInfo>> GetAllBooksAsync(CancellationToken cancellationToken = default)
     {
-        await using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(cancellationToken);
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-        await using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT id, title, author, language, edition, total_chunks, status, indexed_at FROM books WHERE status = 'indexed' ORDER BY title;";
+        var books = await db.Books
+            .Where(b => b.Status == "indexed")
+            .OrderBy(b => b.Title)
+            .ToListAsync(cancellationToken);
 
-        var results = new List<BookInfo>();
-        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
+        return books.Select(b => new BookInfo
         {
-            results.Add(new BookInfo
-            {
-                Id = reader.GetString(0),
-                Title = reader.GetString(1),
-                Author = reader.GetString(2),
-                Language = reader.GetString(3),
-                Edition = reader.GetString(4),
-                TotalChunks = reader.GetInt32(5),
-                Status = Enum.Parse<BookStatus>(reader.GetString(6), ignoreCase: true),
-                IndexedAt = reader.IsDBNull(7) ? null : DateTimeOffset.Parse(reader.GetString(7))
-            });
-        }
-
-        return results;
+            Id = b.Id,
+            Title = b.Title,
+            Author = b.Author,
+            Language = b.Language,
+            Edition = b.Edition,
+            TotalChunks = b.TotalChunks,
+            Status = Enum.Parse<BookStatus>(b.Status, ignoreCase: true),
+            IndexedAt = b.IndexedAt
+        }).ToList();
     }
 }
