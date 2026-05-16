@@ -6,21 +6,10 @@ using MedAssist.Web.Components;
 using MedAssist.Web.Extensions;
 using Serilog;
 using Serilog.Events;
-using Serilog.Formatting.Compact;
-
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
-    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
-    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
-    .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
-    .WriteTo.Console(new CompactJsonFormatter())
-    .Enrich.FromLogContext()
-    .Enrich.WithEnvironmentName()
-    .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddSharedConfiguration();
-builder.Host.UseSerilog();
+builder.Host.UseSerilog((ctx, cfg) => cfg.ReadFrom.Configuration(ctx.Configuration));
 
 builder.Services.AddDataServices(builder.Configuration);
 builder.Services.AddAiServices(builder.Configuration);

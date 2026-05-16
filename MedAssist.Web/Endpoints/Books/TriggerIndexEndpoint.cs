@@ -7,8 +7,13 @@ namespace MedAssist.Web.Endpoints.Books;
 public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<TriggerIndexEndpoint> _logger;
 
-    public TriggerIndexEndpoint(IServiceScopeFactory scopeFactory) => _scopeFactory = scopeFactory;
+    public TriggerIndexEndpoint(IServiceScopeFactory scopeFactory, ILogger<TriggerIndexEndpoint> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
 
     public override void Configure()
     {
@@ -18,11 +23,18 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var numericId = Query<int>("id", isRequired: true);
+        if (!int.TryParse(Query<string>("id"), out var id) || id <= 0)
+        {
+            await HttpContext.Response.SendAsync(
+                new { message = "Query parameter 'id' must be a positive integer." },
+                statusCode: 400,
+                cancellation: ct);
+            return;
+        }
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var bookRepo = scope.ServiceProvider.GetRequiredService<BookRepository>();
-        var book = await bookRepo.GetByIdAsync(numericId, ct);
+        var book = await bookRepo.GetByIdAsync(id, ct);
 
         if (book is null || !File.Exists(book.FilePath))
         {
@@ -44,22 +56,24 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
 
         _ = Task.Run(async () =>
         {
-            await using var bgScope = _scopeFactory.CreateAsyncScope();
-            var logger = bgScope.ServiceProvider.GetRequiredService<ILogger<TriggerIndexEndpoint>>();
             try
             {
+                await using var bgScope = _scopeFactory.CreateAsyncScope();
                 var docling = bgScope.ServiceProvider.GetRequiredService<DoclingClient>();
                 var indexer = bgScope.ServiceProvider.GetRequiredService<BookIndexer>();
 
+                _logger.LogInformation("Starting Docling conversion for {BookId}", bookId);
                 await using var pdfStream = File.OpenRead(pdfPath);
                 var markdown = await docling.ConvertPdfToMarkdownAsync(pdfStream, $"{bookId}.pdf");
+
+                _logger.LogInformation("Docling conversion done for {BookId}, starting indexing", bookId);
                 await indexer.IndexAsync(markdown, bookId, book.Title, book.Author, book.Language, book.Edition);
 
-                logger.LogInformation("Background indexing complete for {BookId}", bookId);
+                _logger.LogInformation("Background indexing complete for {BookId}", bookId);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Background indexing failed for {BookId}", bookId);
+                _logger.LogError(ex, "Background indexing failed for {BookId}", bookId);
             }
         }, CancellationToken.None);
 

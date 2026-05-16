@@ -69,7 +69,7 @@ internal static class ServiceCollectionExtensions
         services.AddHttpClient<DoclingClient>(client =>
         {
             client.BaseAddress = new Uri(doclingEndpoint);
-            client.Timeout = TimeSpan.FromMinutes(10);
+            client.Timeout = TimeSpan.FromMinutes(30);
         });
         services.AddTransient<MarkdownChunker>();
         services.AddTransient<ChunkEnricher>();
@@ -156,14 +156,14 @@ internal static class ServiceCollectionExtensions
                 tracing
                     .SetResourceBuilder(resource)
                     .AddSource("MedAssist.Web")
-                    .AddAspNetCoreInstrumentation()
+                    .AddAspNetCoreInstrumentation(o =>
+                    {
+                        o.Filter = ctx =>
+                            !ctx.Request.Path.StartsWithSegments("/metrics") &&
+                            !ctx.Request.Path.StartsWithSegments("/health");
+                    })
                     .AddHttpClientInstrumentation()
                     .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
-
-                if (environment.IsDevelopment())
-                {
-                    tracing.AddConsoleExporter();
-                }
             });
 
         return services;

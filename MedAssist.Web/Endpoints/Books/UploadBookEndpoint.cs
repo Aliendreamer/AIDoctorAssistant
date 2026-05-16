@@ -43,8 +43,7 @@ public sealed class UploadBookEndpoint(
             ?? throw new InvalidOperationException("Books:RawPath is not configured.");
         Directory.CreateDirectory(rawBooksPath);
 
-        var safeFileName = Path.GetFileName(req.File!.FileName);
-        var destPath = Path.Combine(rawBooksPath, safeFileName);
+        var destPath = Path.Combine(rawBooksPath, $"{req.BookId}.pdf");
 
         await using (var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
         await using (var input = req.File.OpenReadStream())
