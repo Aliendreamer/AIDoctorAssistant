@@ -22,5 +22,6 @@ public static class OnnxConstants
         public const string TokenizerJson = "tokenizer.json";
         public const string TokenizerConfigJson = "tokenizer_config.json";
         public const string SpecialTokensMapJson = "special_tokens_map.json";
+        public const string VocabTxt = "vocab.txt";
     }
 }

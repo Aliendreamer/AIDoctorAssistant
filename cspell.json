@@ -150,6 +150,18 @@
     "healthz",
 
     "contentfiles",
-    "buildtransitive"
+    "buildtransitive",
+
+    "Unigram",
+    "unigram",
+    "Viterbi",
+    "viterbi",
+    "NFKC",
+    "nfkc",
+    "sentencepiece",
+    "SentencePiece",
+
+    "лечение",
+    "хипертония"
   ]
 }

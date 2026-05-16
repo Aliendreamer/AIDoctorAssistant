@@ -136,11 +136,6 @@ services:
       - ./docker/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
       - tempo-data:/var/tempo
     command: ["-config.file=/etc/tempo.yaml"]
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3200/ready || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
     networks:
       - medassist-net
 

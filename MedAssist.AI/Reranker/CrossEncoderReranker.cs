@@ -16,10 +16,10 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
     public CrossEncoderReranker(string modelDirectory)
     {
         var modelPath = Path.Combine(modelDirectory, OnnxConstants.Files.ModelOnnx);
-        var tokenizerPath = Path.Combine(modelDirectory, OnnxConstants.Files.TokenizerJson);
+        var vocabPath = Path.Combine(modelDirectory, OnnxConstants.Files.VocabTxt);
 
         _session = new InferenceSession(modelPath, new SessionOptions());
-        _tokenizer = BertTokenizer.Create(tokenizerPath);
+        _tokenizer = BertTokenizer.Create(vocabPath);
     }
 
     public async Task<IReadOnlyList<MedicalChunk>> RerankAsync(

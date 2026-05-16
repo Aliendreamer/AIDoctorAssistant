@@ -1,216 +1,258 @@
 {
-  "__export_format": 6,
-  "__export_date": "2026-05-15T00:00:00.000Z",
-  "__export_source": "yaak.app",
-  "resources": {
-    "workspaces": [
-      {
-        "id": "wk_medassist",
-        "name": "MedAssist",
-        "description": "Bilingual RAG medical assistant API"
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-05-16",
+  "__export_source": "medassist-api",
+  "resources": [
+    {
+      "_id": "wrk_medassist",
+      "_type": "workspace",
+      "parentId": null,
+      "name": "MedAssist API",
+      "description": "Bilingual RAG medical assistant — import into Yaak via File > Import",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_local",
+      "_type": "environment",
+      "parentId": "wrk_medassist",
+      "name": "Local",
+      "data": {
+        "baseUrl": "http://localhost:8080",
+        "token": ""
       }
-    ],
-    "environments": [
-      {
-        "id": "ev_local",
-        "workspaceId": "wk_medassist",
-        "name": "Local",
-        "variables": [
-          { "name": "baseUrl", "value": "http://localhost:8080", "enabled": true },
-          { "name": "token", "value": "", "enabled": true }
-        ]
+    },
+    {
+      "_id": "fld_auth",
+      "_type": "request_group",
+      "parentId": "wrk_medassist",
+      "name": "Auth"
+    },
+    {
+      "_id": "fld_books",
+      "_type": "request_group",
+      "parentId": "wrk_medassist",
+      "name": "Books"
+    },
+    {
+      "_id": "fld_query",
+      "_type": "request_group",
+      "parentId": "wrk_medassist",
+      "name": "Query"
+    },
+    {
+      "_id": "fld_dictionary",
+      "_type": "request_group",
+      "parentId": "wrk_medassist",
+      "name": "Dictionary"
+    },
+    {
+      "_id": "fld_observability",
+      "_type": "request_group",
+      "parentId": "wrk_medassist",
+      "name": "Observability"
+    },
+    {
+      "_id": "req_login_admin",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "Login (admin)",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/auth/login",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"admin\",\n  \"password\": \"medassist123\"\n}"
       },
-      {
-        "id": "ev_docker",
-        "workspaceId": "wk_medassist",
-        "name": "Docker",
-        "variables": [
-          { "name": "baseUrl", "value": "http://localhost:8080", "enabled": true },
-          { "name": "token", "value": "", "enabled": true }
-        ]
-      }
-    ],
-    "folders": [
-      {
-        "id": "fl_auth",
-        "workspaceId": "wk_medassist",
-        "name": "Auth"
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_login_doctor",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "Login (doctor)",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/auth/login",
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"doctor\",\n  \"password\": \"doctor123\"\n}"
       },
-      {
-        "id": "fl_books",
-        "workspaceId": "wk_medassist",
-        "name": "Books"
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_books_list",
+      "_type": "request",
+      "parentId": "fld_books",
+      "name": "List books",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/books",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": {
+        "mimeType": ""
       },
-      {
-        "id": "fl_query",
-        "workspaceId": "wk_medassist",
-        "name": "Query"
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_query_disease",
+      "_type": "request",
+      "parentId": "fld_query",
+      "name": "Disease query",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/query",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"query\": \"pneumonia treatment guidelines\",\n  \"queryType\": \"Disease\",\n  \"language\": \"Both\",\n  \"webSearchEnabled\": false\n}"
       },
-      {
-        "id": "fl_dictionary",
-        "workspaceId": "wk_medassist",
-        "name": "Dictionary"
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_query_symptoms",
+      "_type": "request",
+      "parentId": "fld_query",
+      "name": "Symptoms query",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/query",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"query\": \"chest pain shortness of breath\",\n  \"queryType\": \"Symptoms\",\n  \"language\": \"English\",\n  \"bookIds\": [\"smoke-test-v1\"],\n  \"webSearchEnabled\": false\n}"
       },
-      {
-        "id": "fl_observability",
-        "workspaceId": "wk_medassist",
-        "name": "Observability"
-      }
-    ],
-    "http_requests": [
-      {
-        "id": "req_login_admin",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_auth",
-        "name": "Login (admin)",
-        "method": "POST",
-        "url": "{{ baseUrl }}/api/auth/login",
-        "body": {
-          "contentType": "application/json",
-          "text": "{\n  \"username\": \"admin\",\n  \"password\": \"medassist123\"\n}"
-        },
-        "headers": [
-          { "name": "Content-Type", "value": "application/json", "enabled": true }
-        ]
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_query_treatment_bg",
+      "_type": "request",
+      "parentId": "fld_query",
+      "name": "Treatment query (Bulgarian + web)",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/query",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"query\": \"лечение на хипертония\",\n  \"queryType\": \"Treatment\",\n  \"language\": \"Bulgarian\",\n  \"webSearchEnabled\": true\n}"
       },
-      {
-        "id": "req_login_doctor",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_auth",
-        "name": "Login (doctor)",
-        "method": "POST",
-        "url": "{{ baseUrl }}/api/auth/login",
-        "body": {
-          "contentType": "application/json",
-          "text": "{\n  \"username\": \"doctor\",\n  \"password\": \"doctor123\"\n}"
-        },
-        "headers": [
-          { "name": "Content-Type", "value": "application/json", "enabled": true }
-        ]
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_dict_icd_pneumonia",
+      "_type": "request",
+      "parentId": "fld_dictionary",
+      "name": "Lookup J18.9 (Pneumonia)",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/dictionary/J18.9",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": {
+        "mimeType": ""
       },
-      {
-        "id": "req_books_list",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_books",
-        "name": "List books",
-        "method": "GET",
-        "url": "{{ baseUrl }}/api/books",
-        "headers": [
-          { "name": "Authorization", "value": "Bearer {{ token }}", "enabled": true }
-        ]
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_dict_icd_hypertension",
+      "_type": "request",
+      "parentId": "fld_dictionary",
+      "name": "Lookup I10 (Hypertension)",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/dictionary/I10",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": {
+        "mimeType": ""
       },
-      {
-        "id": "req_query_disease",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_query",
-        "name": "Disease query",
-        "method": "POST",
-        "url": "{{ baseUrl }}/api/query",
-        "body": {
-          "contentType": "application/json",
-          "text": "{\n  \"query\": \"pneumonia treatment guidelines\",\n  \"queryType\": \"Disease\",\n  \"language\": \"Both\",\n  \"webSearchEnabled\": false\n}"
-        },
-        "headers": [
-          { "name": "Authorization", "value": "Bearer {{ token }}", "enabled": true },
-          { "name": "Content-Type", "value": "application/json", "enabled": true }
-        ]
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_dict_icd_diabetes",
+      "_type": "request",
+      "parentId": "fld_dictionary",
+      "name": "Lookup E11 (Type 2 Diabetes)",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/dictionary/E11",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": {
+        "mimeType": ""
       },
-      {
-        "id": "req_query_symptoms",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_query",
-        "name": "Symptoms query",
-        "method": "POST",
-        "url": "{{ baseUrl }}/api/query",
-        "body": {
-          "contentType": "application/json",
-          "text": "{\n  \"query\": \"chest pain shortness of breath\",\n  \"queryType\": \"Symptoms\",\n  \"language\": \"English\",\n  \"bookIds\": [\"smoke-test-v1\"],\n  \"webSearchEnabled\": false\n}"
-        },
-        "headers": [
-          { "name": "Authorization", "value": "Bearer {{ token }}", "enabled": true },
-          { "name": "Content-Type", "value": "application/json", "enabled": true }
-        ]
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_dict_search_en",
+      "_type": "request",
+      "parentId": "fld_dictionary",
+      "name": "Search: pneumonia",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/dictionary/search",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": {
+        "mimeType": ""
       },
-      {
-        "id": "req_query_treatment_bg",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_query",
-        "name": "Treatment query (Bulgarian + web)",
-        "method": "POST",
-        "url": "{{ baseUrl }}/api/query",
-        "body": {
-          "contentType": "application/json",
-          "text": "{\n  \"query\": \"лечение на хипертония\",\n  \"queryType\": \"Treatment\",\n  \"language\": \"Bulgarian\",\n  \"webSearchEnabled\": true\n}"
-        },
-        "headers": [
-          { "name": "Authorization", "value": "Bearer {{ token }}", "enabled": true },
-          { "name": "Content-Type", "value": "application/json", "enabled": true }
-        ]
+      "parameters": [
+        { "name": "q", "value": "pneumonia" }
+      ],
+      "authentication": {}
+    },
+    {
+      "_id": "req_dict_search_bg",
+      "_type": "request",
+      "parentId": "fld_dictionary",
+      "name": "Search: хипертония (BG)",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/dictionary/search",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": {
+        "mimeType": ""
       },
-      {
-        "id": "req_dict_icd_pneumonia",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_dictionary",
-        "name": "Lookup J18.9 (Pneumonia)",
-        "method": "GET",
-        "url": "{{ baseUrl }}/api/dictionary/J18.9",
-        "headers": [
-          { "name": "Authorization", "value": "Bearer {{ token }}", "enabled": true }
-        ]
+      "parameters": [
+        { "name": "q", "value": "хипертония" }
+      ],
+      "authentication": {}
+    },
+    {
+      "_id": "req_metrics",
+      "_type": "request",
+      "parentId": "fld_observability",
+      "name": "Prometheus metrics",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/metrics",
+      "headers": [],
+      "body": {
+        "mimeType": ""
       },
-      {
-        "id": "req_dict_icd_hypertension",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_dictionary",
-        "name": "Lookup I10 (Hypertension)",
-        "method": "GET",
-        "url": "{{ baseUrl }}/api/dictionary/I10",
-        "headers": [
-          { "name": "Authorization", "value": "Bearer {{ token }}", "enabled": true }
-        ]
-      },
-      {
-        "id": "req_dict_icd_diabetes",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_dictionary",
-        "name": "Lookup E11 (Type 2 Diabetes)",
-        "method": "GET",
-        "url": "{{ baseUrl }}/api/dictionary/E11",
-        "headers": [
-          { "name": "Authorization", "value": "Bearer {{ token }}", "enabled": true }
-        ]
-      },
-      {
-        "id": "req_dict_search_en",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_dictionary",
-        "name": "Search: pneumonia",
-        "method": "GET",
-        "url": "{{ baseUrl }}/api/dictionary/search?q=pneumonia",
-        "headers": [
-          { "name": "Authorization", "value": "Bearer {{ token }}", "enabled": true }
-        ]
-      },
-      {
-        "id": "req_dict_search_bg",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_dictionary",
-        "name": "Search: хипертония (BG)",
-        "method": "GET",
-        "url": "{{ baseUrl }}/api/dictionary/search?q=%D1%85%D0%B8%D0%BF%D0%B5%D1%80%D1%82%D0%BE%D0%BD%D0%B8%D1%8F",
-        "headers": [
-          { "name": "Authorization", "value": "Bearer {{ token }}", "enabled": true }
-        ]
-      },
-      {
-        "id": "req_metrics",
-        "workspaceId": "wk_medassist",
-        "folderId": "fl_observability",
-        "name": "Prometheus metrics",
-        "method": "GET",
-        "url": "{{ baseUrl }}/metrics",
-        "headers": []
-      }
-    ]
-  }
+      "parameters": [],
+      "authentication": {}
+    }
+  ]
 }

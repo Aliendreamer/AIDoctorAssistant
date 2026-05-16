@@ -23,7 +23,7 @@ public sealed class ModelInitializer
     private static readonly (string RemotePath, string LocalFile)[] _rerankerModelFiles =
     [
         ($"{_rerankerHfBase}/onnx/{OnnxConstants.Files.ModelOnnx}", OnnxConstants.Files.ModelOnnx),
-        ($"{_rerankerHfBase}/{OnnxConstants.Files.TokenizerJson}", OnnxConstants.Files.TokenizerJson),
+        ($"{_rerankerHfBase}/{OnnxConstants.Files.VocabTxt}", OnnxConstants.Files.VocabTxt),
         ($"{_rerankerHfBase}/{OnnxConstants.Files.TokenizerConfigJson}", OnnxConstants.Files.TokenizerConfigJson),
         ($"{_rerankerHfBase}/{OnnxConstants.Files.SpecialTokensMapJson}", OnnxConstants.Files.SpecialTokensMapJson),
     ];

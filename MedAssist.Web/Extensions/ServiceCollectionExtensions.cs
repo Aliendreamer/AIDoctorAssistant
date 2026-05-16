@@ -38,14 +38,10 @@ internal static class ServiceCollectionExtensions
         var modelsPath = configuration["Models:Path"] ?? "models";
         var modelDir = Path.Combine(modelsPath, "multilingual-e5-large");
 
-        services.AddHttpClient<ModelInitializer>()
-            .AddStandardResilienceHandler(options =>
-            {
-                options.TotalRequestTimeout.Timeout = TimeSpan.FromMinutes(15);
-                options.AttemptTimeout.Timeout = TimeSpan.FromMinutes(10);
-                options.Retry.MaxRetryAttempts = 2;
-                options.Retry.Delay = TimeSpan.FromSeconds(5);
-            });
+        services.AddHttpClient<ModelInitializer>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(15);
+        });
         services.AddSingleton<IEmbedder>(_ => new MultilingualE5Embedder(modelDir));
 
         var qdrantEndpoint = configuration["VectorStore:Qdrant:Endpoint"] ?? "http://localhost:6333";
