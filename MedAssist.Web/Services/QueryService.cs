@@ -2,7 +2,6 @@ using MedAssist.AI.Kernel;
 using MedAssist.AI.Plugins;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Models;
-using Microsoft.Extensions.Configuration;
 using Microsoft.SemanticKernel;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -83,7 +82,7 @@ public sealed class QueryService
         CancellationToken cancellationToken)
     {
         var pluginName = KernelFactory.PluginName<TPlugin>();
-        var func = _kernel.Plugins[pluginName][nameof(SymptomsPlugin.SearchAsync)];
+        var func = _kernel.Plugins[pluginName]["Search"];
         var result = await _kernel.InvokeAsync(func, new KernelArguments
         {
             ["query"] = query,
