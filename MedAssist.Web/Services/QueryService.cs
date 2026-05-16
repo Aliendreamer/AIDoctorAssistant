@@ -1,6 +1,7 @@
 using MedAssist.AI.Plugins;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Models;
+using Microsoft.Extensions.Configuration;
 using Microsoft.SemanticKernel;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -17,10 +18,11 @@ public sealed class QueryService
     private static readonly Counter<long> _qdrantResults = _meter.CreateCounter<long>(
         "qdrant_results_total", description: "Total Qdrant results returned");
 
-    public QueryService(Kernel kernel, HttpClient httpClient)
+    public QueryService(Kernel kernel, HttpClient httpClient, IConfiguration configuration)
     {
         _kernel = kernel;
-        _webSearchPlugin = new WebSearchPlugin(httpClient);
+        var searchEndpoint = configuration["WebSearch:Endpoint"] ?? "http://localhost:8081";
+        _webSearchPlugin = new WebSearchPlugin(httpClient, searchEndpoint);
     }
 
     public async Task<QueryResult> ExecuteAsync(QueryRequest request, CancellationToken cancellationToken = default)

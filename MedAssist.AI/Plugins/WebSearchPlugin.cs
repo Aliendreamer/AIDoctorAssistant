@@ -1,62 +1,69 @@
 using MedAssist.Shared.Models;
 using Microsoft.SemanticKernel;
 using System.Net.Http.Json;
-using System.Xml.Linq;
+using System.Text.Json.Serialization;
 
 namespace MedAssist.AI.Plugins;
 
 public sealed class WebSearchPlugin
 {
     private readonly HttpClient _httpClient;
-    private const string _eSearchBase = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi";
-    private const string _eFetchBase = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
+    private readonly string _searchEndpoint;
 
-    public WebSearchPlugin(HttpClient httpClient) => _httpClient = httpClient;
+    public WebSearchPlugin(HttpClient httpClient, string searchEndpoint)
+    {
+        _httpClient = httpClient;
+        _searchEndpoint = searchEndpoint.TrimEnd('/');
+    }
 
-    [KernelFunction, System.ComponentModel.Description("Search PubMed for medical literature when book sources are insufficient.")]
+    [KernelFunction, System.ComponentModel.Description("Search the web for medical information when book sources are insufficient.")]
     public async Task<IReadOnlyList<SourceCitation>> SearchAsync(
         [System.ComponentModel.Description("Medical query to search")] string query,
         [System.ComponentModel.Description("Language preference: en, bg, both")] string language = "en",
         CancellationToken cancellationToken = default)
     {
-        var pmids = await SearchPubMedAsync(query, cancellationToken);
-        if (pmids.Count == 0)
+        var url = $"{_searchEndpoint}/search?q={Uri.EscapeDataString(query)}&format=json&categories=science,general&language={MapLanguage(language)}";
+
+        var response = await _httpClient.GetFromJsonAsync<SearXNGResponse>(url, cancellationToken);
+        if (response?.Results is not { Count: > 0 })
         {
             return [];
         }
 
-        return await FetchSummariesAsync(pmids, cancellationToken);
-    }
-
-    private async Task<IReadOnlyList<string>> SearchPubMedAsync(string query, CancellationToken cancellationToken)
-    {
-        var url = $"{_eSearchBase}?db=pubmed&term={Uri.EscapeDataString(query)}&retmax=5&retmode=xml";
-        var response = await _httpClient.GetStringAsync(url, cancellationToken);
-        var xml = XDocument.Parse(response);
-        return xml.Descendants("Id").Select(e => e.Value).ToList();
-    }
-
-    private async Task<IReadOnlyList<SourceCitation>> FetchSummariesAsync(
-        IReadOnlyList<string> pmids,
-        CancellationToken cancellationToken)
-    {
-        var ids = string.Join(",", pmids);
-        var url = $"{_eFetchBase}?db=pubmed&id={ids}&rettype=abstract&retmode=xml";
-        var response = await _httpClient.GetStringAsync(url, cancellationToken);
-        var xml = XDocument.Parse(response);
-
-        return xml.Descendants("PubmedArticle").Select(article =>
-        {
-            var pmid = article.Descendants("PMID").FirstOrDefault()?.Value ?? string.Empty;
-            var title = article.Descendants("ArticleTitle").FirstOrDefault()?.Value ?? "Untitled";
-
-            return new SourceCitation
+        return response.Results
+            .Take(5)
+            .Select(r => new SourceCitation
             {
                 SourceType = SourceType.Web,
-                SourceName = "PubMed",
-                ArticleTitle = title,
-                Url = $"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
-            };
-        }).ToList();
+                SourceName = r.Engine ?? "Web",
+                ArticleTitle = r.Title ?? r.Url ?? "Untitled",
+                Url = r.Url ?? string.Empty
+            })
+            .ToList();
+    }
+
+    private static string MapLanguage(string language) => language.ToLowerInvariant() switch
+    {
+        "bg" => "bg",
+        "en" => "en",
+        _ => "all"
+    };
+
+    private sealed class SearXNGResponse
+    {
+        [JsonPropertyName("results")]
+        public List<SearXNGResult>? Results { get; init; }
+    }
+
+    private sealed class SearXNGResult
+    {
+        [JsonPropertyName("title")]
+        public string? Title { get; init; }
+
+        [JsonPropertyName("url")]
+        public string? Url { get; init; }
+
+        [JsonPropertyName("engine")]
+        public string? Engine { get; init; }
     }
 }

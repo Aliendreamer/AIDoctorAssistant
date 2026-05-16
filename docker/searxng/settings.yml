@@ -1,0 +1,60 @@
+use_default_settings: true
+
+general:
+  instance_name: "MedAssist Search"
+  privacypolicy_url: false
+  contact_url: false
+  enable_metrics: false
+
+server:
+  secret_key: "medassist-searxng-secret-change-in-production"
+  limiter: false
+  image_proxy: false
+  port: 8080
+  bind_address: "0.0.0.0"
+  base_url: false
+
+ui:
+  static_use_hash: true
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: ""
+  formats:
+    - html
+    - json
+
+# Enable engines relevant to medical queries
+engines:
+  - name: google
+    engine: google
+    categories: general
+    disabled: false
+
+  - name: duckduckgo
+    engine: duckduckgo
+    categories: general
+    disabled: false
+
+  - name: pubmed
+    engine: pubmed
+    categories: science
+    disabled: false
+    timeout: 10.0
+
+  - name: semantic scholar
+    engine: semantic_scholar
+    categories: science
+    disabled: false
+
+  - name: wikipedia
+    engine: wikipedia
+    categories: general
+    disabled: false
+
+categories_as_tabs:
+  general:
+    name: General
+  science:
+    name: Science & Medical
