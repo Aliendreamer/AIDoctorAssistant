@@ -31,7 +31,7 @@ Content-Type: application/json
 # ADMIN — book management
 # ─────────────────────────────────────────
 
-### Upload a book (PDF) — returns 200 with id + bookId
+### Upload a book (PDF) — saves file + registers in DB, returns id; does NOT start indexing
 POST {{baseUrl}}/api/admin/books/upload
 Authorization: Bearer {{token}}
 Content-Type: multipart/form-data; boundary=----Boundary
@@ -63,7 +63,7 @@ Content-Type: application/pdf
 < ./my-book.pdf
 ------Boundary--
 
-### Trigger indexing — use id from upload response
+### Trigger indexing — Docling OCR + RAG pipeline runs in background; use id from upload response
 POST {{baseUrl}}/api/admin/index?id=1
 Authorization: Bearer {{token}}
 

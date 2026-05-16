@@ -128,7 +128,7 @@
       "_id": "req_books_upload",
       "_type": "request",
       "parentId": "fld_admin",
-      "name": "Upload book (PDF)",
+      "name": "Upload book PDF (no indexing)",
       "method": "POST",
       "url": "{{ _.baseUrl }}/api/admin/books/upload",
       "headers": [
