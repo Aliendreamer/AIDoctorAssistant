@@ -1,18 +1,18 @@
 using System.Text.RegularExpressions;
-using MedAssist.Indexer.Repositories;
+using MedAssist.Shared.Interfaces;
 
-namespace MedAssist.Indexer.Ingestion;
+namespace MedAssist.AI.Ingestion;
 
 public sealed partial class VocabularyBuilder
 {
-    private readonly BM25VocabRepository _repo;
+    private readonly IBM25VocabStore _vocabStore;
     private readonly Dictionary<string, int> _termDfs = [];
     private int _totalChunks;
 
     [GeneratedRegex(@"\p{L}+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex TokensRegex();
 
-    public VocabularyBuilder(BM25VocabRepository repo) => _repo = repo;
+    public VocabularyBuilder(IBM25VocabStore vocabStore) => _vocabStore = vocabStore;
 
     public void AddChunk(string text)
     {
@@ -31,15 +31,16 @@ public sealed partial class VocabularyBuilder
         }
     }
 
-    public async Task FlushAsync(int existingTotal, CancellationToken cancellationToken = default)
+    public async Task FlushAsync(CancellationToken cancellationToken = default)
     {
         if (_termDfs.Count == 0)
         {
             return;
         }
 
+        var existingTotal = await _vocabStore.GetTotalDocumentsAsync(cancellationToken);
         var cumulativeTotal = existingTotal + _totalChunks;
-        await _repo.UpsertTermsAsync(_termDfs, cumulativeTotal, cancellationToken);
+        await _vocabStore.UpsertTermsAsync(_termDfs, cumulativeTotal, cancellationToken);
         _termDfs.Clear();
         _totalChunks = 0;
     }

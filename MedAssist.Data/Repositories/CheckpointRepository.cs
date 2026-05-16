@@ -1,7 +1,7 @@
-using MedAssist.Data;
 using MedAssist.Data.Entities;
+using Microsoft.EntityFrameworkCore;
 
-namespace MedAssist.Indexer.Repositories;
+namespace MedAssist.Data.Repositories;
 
 public sealed record IngestionCheckpoint(
     string BookId,
@@ -13,13 +13,14 @@ public sealed record IngestionCheckpoint(
 
 public sealed class CheckpointRepository
 {
-    private readonly MedAssistDbContext _db;
+    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
 
-    public CheckpointRepository(MedAssistDbContext db) => _db = db;
+    public CheckpointRepository(IDbContextFactory<MedAssistDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task UpsertAsync(IngestionCheckpoint checkpoint, CancellationToken cancellationToken = default)
     {
-        var existing = await _db.IngestionCheckpoints.FindAsync([checkpoint.BookId], cancellationToken);
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.IngestionCheckpoints.FindAsync([checkpoint.BookId], cancellationToken);
         if (existing is not null)
         {
             existing.TotalChunks = checkpoint.TotalChunks;
@@ -30,7 +31,7 @@ public sealed class CheckpointRepository
         }
         else
         {
-            _db.IngestionCheckpoints.Add(new IngestionCheckpointEntity
+            db.IngestionCheckpoints.Add(new IngestionCheckpointEntity
             {
                 BookId = checkpoint.BookId,
                 TotalChunks = checkpoint.TotalChunks,
@@ -41,12 +42,13 @@ public sealed class CheckpointRepository
             });
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IngestionCheckpoint?> GetByBookIdAsync(string bookId, CancellationToken cancellationToken = default)
     {
-        var entity = await _db.IngestionCheckpoints.FindAsync([bookId], cancellationToken);
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.IngestionCheckpoints.FindAsync([bookId], cancellationToken);
         if (entity is null)
         {
             return null;

@@ -24,10 +24,12 @@ public sealed class BookCatalogService
         return books.Select(b => new BookInfo
         {
             Id = b.Id,
+            BookId = b.BookId,
             Title = b.Title,
             Author = b.Author,
             Language = b.Language,
             Edition = b.Edition,
+            FilePath = b.FilePath,
             TotalChunks = b.TotalChunks,
             Status = Enum.Parse<BookStatus>(b.Status, ignoreCase: true),
             IndexedAt = b.IndexedAt

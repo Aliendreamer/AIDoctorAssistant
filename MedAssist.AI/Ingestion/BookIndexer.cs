@@ -1,9 +1,10 @@
-using MedAssist.Indexer.Repositories;
+using MedAssist.Data.Repositories;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
+using Microsoft.Extensions.Logging;
 
-namespace MedAssist.Indexer.Ingestion;
+namespace MedAssist.AI.Ingestion;
 
 public sealed class BookIndexer
 {
@@ -15,7 +16,6 @@ public sealed class BookIndexer
     private readonly BookRepository _bookRepo;
     private readonly CheckpointRepository _checkpointRepo;
     private readonly VocabularyBuilder _vocabBuilder;
-    private readonly BM25VocabRepository _vocabRepo;
     private readonly ILogger<BookIndexer> _logger;
     private const int _checkpointInterval = 50;
 
@@ -28,7 +28,6 @@ public sealed class BookIndexer
         BookRepository bookRepo,
         CheckpointRepository checkpointRepo,
         VocabularyBuilder vocabBuilder,
-        BM25VocabRepository vocabRepo,
         ILogger<BookIndexer> logger)
     {
         _vectorStore = vectorStore;
@@ -39,12 +38,11 @@ public sealed class BookIndexer
         _bookRepo = bookRepo;
         _checkpointRepo = checkpointRepo;
         _vocabBuilder = vocabBuilder;
-        _vocabRepo = vocabRepo;
         _logger = logger;
     }
 
     public async Task IndexAsync(
-        string markdownPath,
+        string markdownText,
         string bookId,
         string title,
         string author,
@@ -52,20 +50,22 @@ public sealed class BookIndexer
         string edition = "",
         CancellationToken cancellationToken = default)
     {
-        var markdown = await File.ReadAllTextAsync(markdownPath, cancellationToken);
-        var allChunks = _chunker.Chunk(markdown);
+        var allChunks = _chunker.Chunk(markdownText);
 
         var checkpoint = await _checkpointRepo.GetByBookIdAsync(bookId, cancellationToken);
-        var resumeFromIndex = checkpoint?.Status == IngestionStatus.Complete
-            ? throw new InvalidOperationException($"Book '{bookId}' is already fully indexed.")
-            : (checkpoint?.LastChunkIndex ?? -1) + 1;
+        if (checkpoint?.Status == IngestionStatus.Complete)
+        {
+            throw new InvalidOperationException($"Book '{bookId}' is already fully indexed.");
+        }
+
+        var resumeFromIndex = (checkpoint?.LastChunkIndex ?? -1) + 1;
 
         _logger.LogInformation("Indexing book {BookId}: {Total} chunks, resuming from {Start}",
             bookId, allChunks.Count, resumeFromIndex);
 
         await _bookRepo.UpsertAsync(new BookInfo
         {
-            Id = bookId,
+            BookId = bookId,
             Title = title,
             Author = author,
             Language = language,
@@ -107,20 +107,20 @@ public sealed class BookIndexer
 
             if (indexed % _checkpointInterval == 0)
             {
-                await SaveCheckpointAsync(bookId, allChunks.Count, indexed, i, IngestionStatus.InProgress, cancellationToken);
+                await _checkpointRepo.UpsertAsync(new IngestionCheckpoint(
+                    bookId, allChunks.Count, indexed, i, IngestionStatus.InProgress, DateTimeOffset.UtcNow), cancellationToken);
                 _logger.LogInformation("Checkpoint saved: {Indexed}/{Total} chunks", indexed, allChunks.Count);
             }
         }
 
-        await SaveCheckpointAsync(bookId, allChunks.Count, allChunks.Count, allChunks.Count - 1, "complete", cancellationToken);
+        await _checkpointRepo.UpsertAsync(new IngestionCheckpoint(
+            bookId, allChunks.Count, allChunks.Count, allChunks.Count - 1, IngestionStatus.Complete, DateTimeOffset.UtcNow), cancellationToken);
 
-        var existingTotal = await _vocabRepo.GetTotalDocumentsAsync(cancellationToken);
-        await _vocabBuilder.FlushAsync(existingTotal, cancellationToken);
-        _logger.LogInformation("Vocabulary updated for {BookId}", bookId);
+        await _vocabBuilder.FlushAsync(cancellationToken);
 
         await _bookRepo.UpsertAsync(new BookInfo
         {
-            Id = bookId,
+            BookId = bookId,
             Title = title,
             Author = author,
             Language = language,
@@ -131,17 +131,5 @@ public sealed class BookIndexer
         }, cancellationToken);
 
         _logger.LogInformation("Indexing complete for {BookId}: {Total} chunks", bookId, allChunks.Count);
-    }
-
-    private async Task SaveCheckpointAsync(
-        string bookId,
-        int total,
-        int indexed,
-        int lastIndex,
-        string status,
-        CancellationToken cancellationToken)
-    {
-        await _checkpointRepo.UpsertAsync(new IngestionCheckpoint(
-            bookId, total, indexed, lastIndex, status, DateTimeOffset.UtcNow), cancellationToken);
     }
 }

@@ -71,6 +71,16 @@ public sealed class MedicalDictionaryService : IMedicalDictionary
         return illnesses.Select(MapToEntry).ToList();
     }
 
+    public async Task<IReadOnlyList<IllnessEntry>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var illnesses = await db.Illnesses
+            .Include(i => i.Aliases)
+            .OrderBy(i => i.NameEn)
+            .ToListAsync(cancellationToken);
+        return illnesses.Select(MapToEntry).ToList();
+    }
+
     private static IllnessEntry MapToEntry(IllnessEntity illness) =>
         new()
         {

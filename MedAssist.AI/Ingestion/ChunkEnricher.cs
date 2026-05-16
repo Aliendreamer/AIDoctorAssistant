@@ -1,13 +1,12 @@
-using MedAssist.Indexer.Repositories;
-using MedAssist.Shared.Models;
+using MedAssist.Shared.Interfaces;
 
-namespace MedAssist.Indexer.Ingestion;
+namespace MedAssist.AI.Ingestion;
 
 public sealed class ChunkEnricher
 {
-    private readonly IllnessDictionaryRepository _dictionary;
+    private readonly IMedicalDictionary _dictionary;
 
-    public ChunkEnricher(IllnessDictionaryRepository dictionary) => _dictionary = dictionary;
+    public ChunkEnricher(IMedicalDictionary dictionary) => _dictionary = dictionary;
 
     public async Task<IReadOnlyList<string>> GetIcdCodesAsync(string chunkText, CancellationToken cancellationToken = default)
     {

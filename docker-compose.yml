@@ -14,12 +14,14 @@ services:
       - AI__Ollama__ModelName=qwen2.5:7b
       - Database__ConnectionString=Host=postgres;Database=medassist;Username=medassist;Password=medassist
       - Models__Path=/models
+      - Docling__Endpoint=http://docling:5001
       - OpenTelemetry__Endpoint=http://otel-collector:4317
       - OpenTelemetry__ServiceName=medassist-web
       - WebSearch__Endpoint=http://searxng:8080
+      - Books__RawPath=/books/raw
     volumes:
       - medassist-models:/models
-      - ./books/raw:/books/raw:ro
+      - ./books/raw:/books/raw
       - ./books/processed:/books/processed:ro
     depends_on:
       postgres:
@@ -33,28 +35,22 @@ services:
     networks:
       - medassist-net
 
-  indexer:
-    build:
-      context: .
-      dockerfile: MedAssist.Indexer/Dockerfile
-    environment:
-      - DOTNET_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
-      - VectorStore__Qdrant__Endpoint=http://qdrant:6334
-      - Database__ConnectionString=Host=postgres;Database=medassist;Username=medassist;Password=medassist
-      - Models__Path=/models
-    volumes:
-      - medassist-models:/models
-      - ./books/raw:/books/raw
-      - ./books/processed:/books/processed
-    depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
+  docling:
+    image: ghcr.io/ds4sd/docling-serve:latest
+    ports:
+      - "5001:5001"
     networks:
       - medassist-net
-    profiles:
-      - indexer
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@medassist.com
+      - PGADMIN_DEFAULT_PASSWORD=medassist
+    ports:
+      - "5050:80"
+    networks:
+      - medassist-net
 
   postgres:
     image: postgres:17-alpine

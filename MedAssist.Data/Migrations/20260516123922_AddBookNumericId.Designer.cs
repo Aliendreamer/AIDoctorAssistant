@@ -3,6 +3,7 @@ using System;
 using MedAssist.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MedAssist.Data.Migrations
 {
     [DbContext(typeof(MedAssistDbContext))]
-    partial class MedAssistDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260516123922_AddBookNumericId")]
+    partial class AddBookNumericId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -64,22 +67,14 @@ namespace MedAssist.Data.Migrations
 
             modelBuilder.Entity("MedAssist.Data.Entities.BookEntity", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
+                    b.Property<string>("Id")
+                        .HasColumnType("text")
                         .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Author")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("author");
-
-                    b.Property<string>("BookId")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("book_id");
 
                     b.Property<string>("Edition")
                         .IsRequired()
@@ -104,6 +99,13 @@ namespace MedAssist.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("language");
 
+                    b.Property<int>("NumericId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("numeric_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("NumericId"));
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -124,7 +126,7 @@ namespace MedAssist.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BookId")
+                    b.HasIndex("NumericId")
                         .IsUnique();
 
                     b.ToTable("books", (string)null);

@@ -35,6 +35,12 @@
       "name": "Books"
     },
     {
+      "_id": "fld_admin",
+      "_type": "request_group",
+      "parentId": "wrk_medassist",
+      "name": "Admin"
+    },
+    {
       "_id": "fld_query",
       "_type": "request_group",
       "parentId": "wrk_medassist",
@@ -98,6 +104,46 @@
       ],
       "body": {
         "mimeType": ""
+      },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_books_index",
+      "_type": "request",
+      "parentId": "fld_admin",
+      "name": "Trigger indexing",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/admin/index",
+      "parameters": [
+        { "name": "id", "value": "1" }
+      ],
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": { "mimeType": "" },
+      "authentication": {}
+    },
+    {
+      "_id": "req_books_upload",
+      "_type": "request",
+      "parentId": "fld_admin",
+      "name": "Upload book (PDF)",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/admin/books/upload",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          { "name": "BookId", "value": "my-book-v1" },
+          { "name": "Title", "value": "My Medical Book" },
+          { "name": "Author", "value": "Author Name" },
+          { "name": "Language", "value": "en" },
+          { "name": "Edition", "value": "1st" },
+          { "name": "File", "value": "", "type": "file", "fileName": "" }
+        ]
       },
       "parameters": [],
       "authentication": {}

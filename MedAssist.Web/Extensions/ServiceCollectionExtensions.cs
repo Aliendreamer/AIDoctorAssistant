@@ -3,9 +3,11 @@ using FastEndpoints.Security;
 using FastEndpoints.Swagger;
 using MedAssist.AI.Dictionary;
 using MedAssist.AI.Embedding;
+using MedAssist.AI.Ingestion;
 using MedAssist.AI.Reranker;
 using MedAssist.AI.VectorStore;
 using MedAssist.Data;
+using MedAssist.Data.Repositories;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Web.Services;
 using Microsoft.EntityFrameworkCore;
@@ -61,6 +63,20 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<IEmbedder>(),
             sp.GetRequiredService<ISparseVectorizer>(),
             sp.GetRequiredService<ICrossEncoderReranker>()));
+
+        // Indexing pipeline
+        var doclingEndpoint = configuration["Docling:Endpoint"] ?? "http://docling:5001";
+        services.AddHttpClient<DoclingClient>(client =>
+        {
+            client.BaseAddress = new Uri(doclingEndpoint);
+            client.Timeout = TimeSpan.FromMinutes(10);
+        });
+        services.AddTransient<MarkdownChunker>();
+        services.AddTransient<ChunkEnricher>();
+        services.AddTransient<VocabularyBuilder>();
+        services.AddTransient<BookRepository>();
+        services.AddTransient<CheckpointRepository>();
+        services.AddTransient<BookIndexer>();
 
         return services;
     }

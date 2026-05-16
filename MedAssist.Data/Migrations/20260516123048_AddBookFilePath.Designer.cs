@@ -3,6 +3,7 @@ using System;
 using MedAssist.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MedAssist.Data.Migrations
 {
     [DbContext(typeof(MedAssistDbContext))]
-    partial class MedAssistDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260516123048_AddBookFilePath")]
+    partial class AddBookFilePath
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -64,22 +67,14 @@ namespace MedAssist.Data.Migrations
 
             modelBuilder.Entity("MedAssist.Data.Entities.BookEntity", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
+                    b.Property<string>("Id")
+                        .HasColumnType("text")
                         .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Author")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("author");
-
-                    b.Property<string>("BookId")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("book_id");
 
                     b.Property<string>("Edition")
                         .IsRequired()
@@ -90,10 +85,7 @@ namespace MedAssist.Data.Migrations
 
                     b.Property<string>("FilePath")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("")
-                        .HasColumnName("file_path");
+                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("IndexedAt")
                         .HasColumnType("timestamp with time zone")
@@ -123,9 +115,6 @@ namespace MedAssist.Data.Migrations
                         .HasColumnName("total_chunks");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("BookId")
-                        .IsUnique();
 
                     b.ToTable("books", (string)null);
                 });

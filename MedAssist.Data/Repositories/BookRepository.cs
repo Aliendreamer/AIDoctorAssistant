@@ -1,69 +1,72 @@
-using MedAssist.Data;
 using MedAssist.Data.Entities;
 using MedAssist.Shared.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace MedAssist.Indexer.Repositories;
+namespace MedAssist.Data.Repositories;
 
 public sealed class BookRepository
 {
-    private readonly MedAssistDbContext _db;
+    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
 
-    public BookRepository(MedAssistDbContext db) => _db = db;
+    public BookRepository(IDbContextFactory<MedAssistDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task UpsertAsync(BookInfo book, CancellationToken cancellationToken = default)
     {
-        var existing = await _db.Books.FindAsync([book.Id], cancellationToken);
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var existing = await db.Books.FirstOrDefaultAsync(b => b.BookId == book.BookId, cancellationToken);
         if (existing is not null)
         {
             existing.Title = book.Title;
             existing.Author = book.Author;
             existing.Language = book.Language;
             existing.Edition = book.Edition;
+            existing.FilePath = book.FilePath;
             existing.TotalChunks = book.TotalChunks;
             existing.Status = book.Status.ToString().ToLowerInvariant();
             existing.IndexedAt = book.IndexedAt;
         }
         else
         {
-            _db.Books.Add(new BookEntity
+            db.Books.Add(new BookEntity
             {
-                Id = book.Id,
+                BookId = book.BookId,
                 Title = book.Title,
                 Author = book.Author,
                 Language = book.Language,
                 Edition = book.Edition,
+                FilePath = book.FilePath,
                 TotalChunks = book.TotalChunks,
                 Status = book.Status.ToString().ToLowerInvariant(),
                 IndexedAt = book.IndexedAt
             });
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<BookInfo>> GetAllAsync(CancellationToken cancellationToken = default)
+    public async Task<BookInfo?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
-        var books = await _db.Books
-            .OrderBy(b => b.Title)
-            .ToListAsync(cancellationToken);
-
-        return books.Select(MapToInfo).ToList();
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.Books.FindAsync([id], cancellationToken);
+        return entity is null ? null : MapToInfo(entity);
     }
 
-    public async Task<BookInfo?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
+    public async Task<BookInfo?> GetByBookIdAsync(string bookId, CancellationToken cancellationToken = default)
     {
-        var entity = await _db.Books.FindAsync([id], cancellationToken);
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.Books.FirstOrDefaultAsync(b => b.BookId == bookId, cancellationToken);
         return entity is null ? null : MapToInfo(entity);
     }
 
     private static BookInfo MapToInfo(BookEntity b) => new()
     {
         Id = b.Id,
+        BookId = b.BookId,
         Title = b.Title,
         Author = b.Author,
         Language = b.Language,
         Edition = b.Edition,
+        FilePath = b.FilePath,
         TotalChunks = b.TotalChunks,
         Status = Enum.Parse<BookStatus>(b.Status, ignoreCase: true),
         IndexedAt = b.IndexedAt

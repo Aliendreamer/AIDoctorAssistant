@@ -1,7 +1,6 @@
 <Solution>
   <Project Path="MedAssist.AI/MedAssist.AI.csproj" />
   <Project Path="MedAssist.Data/MedAssist.Data.csproj" />
-  <Project Path="MedAssist.Indexer/MedAssist.Indexer.csproj" />
   <Project Path="MedAssist.Shared/MedAssist.Shared.csproj" />
   <Project Path="MedAssist.Tests/MedAssist.Tests.csproj" />
   <Project Path="MedAssist.Web/MedAssist.Web.csproj" />

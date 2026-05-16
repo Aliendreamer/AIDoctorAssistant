@@ -5,9 +5,14 @@ using Scalar.AspNetCore;
 using MedAssist.Web.Components;
 using MedAssist.Web.Extensions;
 using Serilog;
+using Serilog.Events;
 using Serilog.Formatting.Compact;
 
 Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
     .WriteTo.Console(new CompactJsonFormatter())
     .Enrich.FromLogContext()
     .Enrich.WithEnvironmentName()
@@ -38,6 +43,14 @@ await app.EnsureModelsReadyAsync();
 
 app.UseOpenTelemetryPrometheusScrapingEndpoint();
 app.MapHealthChecks("/health");
+
+app.UseSerilogRequestLogging(opts =>
+{
+    opts.GetLevel = (ctx, _, _) =>
+        ctx.Request.Path.StartsWithSegments("/metrics") || ctx.Request.Path.StartsWithSegments("/health")
+            ? LogEventLevel.Verbose
+            : LogEventLevel.Information;
+});
 
 app.UseSwaggerGen();
 app.MapScalarApiReference(o => o

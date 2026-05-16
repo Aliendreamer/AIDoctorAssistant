@@ -40,7 +40,7 @@
             @foreach (var book in _books)
             {
                 <label class="book-item">
-                    <input type="checkbox" value="@book.Id" @onchange="e => ToggleBook(book.Id, (bool)(e.Value ?? false))" />
+                    <input type="checkbox" value="@book.BookId" @onchange="e => ToggleBook(book.BookId, (bool)(e.Value ?? false))" />
                     @book.Title — @book.Author (@book.Language.ToUpperInvariant())
                 </label>
             }

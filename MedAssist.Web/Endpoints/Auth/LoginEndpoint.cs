@@ -35,12 +35,16 @@ public sealed class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
 
         var secretKey = _configuration["Auth:Jwt:SecretKey"]
             ?? throw new InvalidOperationException("Auth:Jwt:SecretKey is not configured");
+        var issuer = _configuration["Auth:Jwt:Issuer"] ?? "medassist";
+        var audience = _configuration["Auth:Jwt:Audience"] ?? "medassist-api";
         var expiryMinutes = int.TryParse(_configuration["Auth:Jwt:ExpiryMinutes"], out var m) ? m : 480;
         var expiresAt = DateTime.UtcNow.AddMinutes(expiryMinutes);
 
         var token = JwtBearer.CreateToken(o =>
         {
             o.SigningKey = secretKey;
+            o.Issuer = issuer;
+            o.Audience = audience;
             o.ExpireAt = expiresAt;
             o.User.Roles.Add(user.Role);
             o.User.Claims.Add(new Claim(ClaimTypes.Name, user.Username));

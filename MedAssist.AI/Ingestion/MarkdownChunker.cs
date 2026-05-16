@@ -1,8 +1,8 @@
-using MedAssist.Shared.Models;
 using System.Text;
 using System.Text.RegularExpressions;
+using MedAssist.Shared.Models;
 
-namespace MedAssist.Indexer.Ingestion;
+namespace MedAssist.AI.Ingestion;
 
 public sealed class MarkdownChunker
 {
@@ -13,7 +13,6 @@ public sealed class MarkdownChunker
     {
         var lines = markdown.Split('\n');
         var chunks = new List<(string, string, ContentType)>();
-
         var headingStack = new Stack<string>();
         var currentContent = new StringBuilder();
         ContentType currentType = ContentType.Text;
@@ -24,11 +23,8 @@ public sealed class MarkdownChunker
             if (headingMatch.Success)
             {
                 FlushChunk(chunks, headingStack, currentContent, currentType);
-
                 var level = headingMatch.Groups[1].Value.Length;
                 var title = headingMatch.Groups[2].Value.Trim();
-
-                // Trim stack to current level
                 while (headingStack.Count >= level)
                 {
                     headingStack.Pop();
@@ -79,14 +75,12 @@ public sealed class MarkdownChunker
         var result = new List<(string, string, ContentType)>();
         foreach (var (path, text, type) in chunks)
         {
-            var tokens = EstimateTokens(text);
-            if (tokens <= _maxTokens)
+            if (EstimateTokens(text) <= _maxTokens)
             {
                 result.Add((path, text, type));
                 continue;
             }
 
-            // Split at sentence boundaries
             var sentences = Regex.Split(text, @"(?<=[.!?])\s+");
             var current = new StringBuilder();
             foreach (var sentence in sentences)
@@ -125,7 +119,6 @@ public sealed class MarkdownChunker
 
             if (EstimateTokens(pending.Value.Text) < _minTokens)
             {
-                // Merge small chunk with next
                 pending = (pending.Value.HeadingPath, pending.Value.Text + "\n" + chunk.Text, pending.Value.ContentType);
             }
             else
