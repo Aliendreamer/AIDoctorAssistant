@@ -1,3 +1,4 @@
+using MedAssist.AI.Kernel;
 using MedAssist.AI.Plugins;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Models;
@@ -81,8 +82,8 @@ public sealed class QueryService
         string[]? bookIds,
         CancellationToken cancellationToken)
     {
-        var pluginName = typeof(TPlugin).Name.Replace("Plugin", string.Empty);
-        var func = _kernel.Plugins[pluginName]["SearchAsync"];
+        var pluginName = KernelFactory.PluginName<TPlugin>();
+        var func = _kernel.Plugins[pluginName][nameof(SymptomsPlugin.SearchAsync)];
         var result = await _kernel.InvokeAsync(func, new KernelArguments
         {
             ["query"] = query,

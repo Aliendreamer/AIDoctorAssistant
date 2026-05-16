@@ -7,12 +7,17 @@ namespace MedAssist.AI.Kernel;
 
 public static class KernelFactory
 {
+    private const string _pluginSuffix = "Plugin";
+
+    public static string PluginName<T>() => typeof(T).Name.Replace(_pluginSuffix, string.Empty);
+
     public static Microsoft.SemanticKernel.Kernel Build(
         IConfiguration configuration,
         IMedicalDictionary dictionary,
         IVectorStore vectorStore,
         IEmbedder embedder,
-        ISparseVectorizer sparseVectorizer)
+        ISparseVectorizer sparseVectorizer,
+        ICrossEncoderReranker reranker)
     {
         var provider = configuration["AI:ModelProvider"]
             ?? throw new InvalidOperationException("AI:ModelProvider configuration is required.");
@@ -37,9 +42,9 @@ public static class KernelFactory
 
         var kernel = builder.Build();
 
-        kernel.Plugins.AddFromObject(new SymptomsPlugin(dictionary, vectorStore, embedder, sparseVectorizer), "Symptoms");
-        kernel.Plugins.AddFromObject(new DiseasePlugin(dictionary, vectorStore, embedder, sparseVectorizer), "Disease");
-        kernel.Plugins.AddFromObject(new TreatmentPlugin(dictionary, vectorStore, embedder, sparseVectorizer), "Treatment");
+        kernel.Plugins.AddFromObject(new SymptomsPlugin(dictionary, vectorStore, embedder, sparseVectorizer, reranker), PluginName<SymptomsPlugin>());
+        kernel.Plugins.AddFromObject(new DiseasePlugin(dictionary, vectorStore, embedder, sparseVectorizer, reranker), PluginName<DiseasePlugin>());
+        kernel.Plugins.AddFromObject(new TreatmentPlugin(dictionary, vectorStore, embedder, sparseVectorizer, reranker), PluginName<TreatmentPlugin>());
 
         return kernel;
     }

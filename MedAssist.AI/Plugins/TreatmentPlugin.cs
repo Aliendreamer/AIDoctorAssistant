@@ -6,8 +6,8 @@ namespace MedAssist.AI.Plugins;
 
 public sealed class TreatmentPlugin : RagPluginBase
 {
-    public TreatmentPlugin(IMedicalDictionary dictionary, IVectorStore vectorStore, IEmbedder embedder, ISparseVectorizer sparseVectorizer)
-        : base(dictionary, vectorStore, embedder, sparseVectorizer)
+    public TreatmentPlugin(IMedicalDictionary dictionary, IVectorStore vectorStore, IEmbedder embedder, ISparseVectorizer sparseVectorizer, ICrossEncoderReranker reranker)
+        : base(dictionary, vectorStore, embedder, sparseVectorizer, reranker)
     {
     }
 

@@ -10,17 +10,20 @@ public abstract class RagPluginBase
     private readonly IVectorStore _vectorStore;
     private readonly IEmbedder _embedder;
     private readonly ISparseVectorizer _sparseVectorizer;
+    private readonly ICrossEncoderReranker _reranker;
 
     protected RagPluginBase(
         IMedicalDictionary dictionary,
         IVectorStore vectorStore,
         IEmbedder embedder,
-        ISparseVectorizer sparseVectorizer)
+        ISparseVectorizer sparseVectorizer,
+        ICrossEncoderReranker reranker)
     {
         _dictionary = dictionary;
         _vectorStore = vectorStore;
         _embedder = embedder;
         _sparseVectorizer = sparseVectorizer;
+        _reranker = reranker;
     }
 
     protected async Task<QueryResult> ExecuteSearchAsync(
@@ -42,10 +45,15 @@ public abstract class RagPluginBase
             allChunks.AddRange(chunks);
         }
 
-        var distinctChunks = allChunks
+        var candidates = allChunks
             .DistinctBy(c => c.ChunkIndex + c.BookId)
-            .Take(10)
             .ToList();
+
+        var reranked = candidates.Count > 0
+            ? await _reranker.RerankAsync(query, candidates, cancellationToken)
+            : candidates;
+
+        var distinctChunks = reranked.Take(5).ToList();
 
         var answer = BuildAnswer(distinctChunks);
         var sources = distinctChunks.Select(c => new SourceCitation

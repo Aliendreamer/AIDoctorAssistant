@@ -8,6 +8,7 @@ public sealed class ModelInitializer
     private readonly ILogger<ModelInitializer> _logger;
 
     private const string _hfBase = "https://huggingface.co/intfloat/multilingual-e5-large/resolve/main";
+    private const string _rerankerHfBase = "https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2/resolve/main";
 
     private static readonly (string RemotePath, string LocalFile)[] _modelFiles =
     [
@@ -18,17 +19,34 @@ public sealed class ModelInitializer
         ($"{_hfBase}/special_tokens_map.json", "special_tokens_map.json"),
     ];
 
+    private static readonly (string RemotePath, string LocalFile)[] _rerankerModelFiles =
+    [
+        ($"{_rerankerHfBase}/onnx/model.onnx", "model.onnx"),
+        ($"{_rerankerHfBase}/tokenizer.json", "tokenizer.json"),
+        ($"{_rerankerHfBase}/tokenizer_config.json", "tokenizer_config.json"),
+        ($"{_rerankerHfBase}/special_tokens_map.json", "special_tokens_map.json"),
+    ];
+
     public ModelInitializer(HttpClient httpClient, ILogger<ModelInitializer> logger)
     {
         _httpClient = httpClient;
         _logger = logger;
     }
 
-    public async Task EnsureModelReadyAsync(string modelDirectory, CancellationToken cancellationToken = default)
+    public Task EnsureModelReadyAsync(string modelDirectory, CancellationToken cancellationToken = default)
+        => EnsureFilesAsync(modelDirectory, _modelFiles, cancellationToken);
+
+    public Task EnsureRerankerReadyAsync(string modelDirectory, CancellationToken cancellationToken = default)
+        => EnsureFilesAsync(modelDirectory, _rerankerModelFiles, cancellationToken);
+
+    private async Task EnsureFilesAsync(
+        string modelDirectory,
+        (string RemotePath, string LocalFile)[] files,
+        CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(modelDirectory);
 
-        foreach (var (remoteUrl, localFile) in _modelFiles)
+        foreach (var (remoteUrl, localFile) in files)
         {
             var localPath = Path.Combine(modelDirectory, localFile);
             if (File.Exists(localPath))

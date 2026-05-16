@@ -3,6 +3,7 @@ using FastEndpoints.Security;
 using FastEndpoints.Swagger;
 using MedAssist.AI.Dictionary;
 using MedAssist.AI.Embedding;
+using MedAssist.AI.Reranker;
 using MedAssist.AI.VectorStore;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Web.Services;
@@ -48,12 +49,16 @@ internal static class ServiceCollectionExtensions
 
         services.AddSingleton<ISparseVectorizer, SparseVectorizer>();
 
+        var rerankerPath = configuration["Models:RerankerPath"] ?? "models/ms-marco-MiniLM-L-6-v2";
+        services.AddSingleton<ICrossEncoderReranker>(_ => new CrossEncoderReranker(rerankerPath));
+
         services.AddSingleton(sp => AI.Kernel.KernelFactory.Build(
             configuration,
             sp.GetRequiredService<IMedicalDictionary>(),
             sp.GetRequiredService<IVectorStore>(),
             sp.GetRequiredService<IEmbedder>(),
-            sp.GetRequiredService<ISparseVectorizer>()));
+            sp.GetRequiredService<ISparseVectorizer>(),
+            sp.GetRequiredService<ICrossEncoderReranker>()));
 
         return services;
     }

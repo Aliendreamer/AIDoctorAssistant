@@ -123,6 +123,15 @@
     "enricher",
     "Enricher",
 
+    "reranker",
+    "Reranker",
+    "reranking",
+    "reranked",
+    "MiniLM",
+    "minilm",
+    "mmarco",
+    "marco",
+
     "semaphore",
     "SemaphoreSlim",
 
