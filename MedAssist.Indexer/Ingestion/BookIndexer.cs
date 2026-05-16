@@ -1,7 +1,7 @@
 using MedAssist.Indexer.Repositories;
+using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
-using Microsoft.Extensions.Logging;
 
 namespace MedAssist.Indexer.Ingestion;
 
@@ -56,7 +56,7 @@ public sealed class BookIndexer
         var allChunks = _chunker.Chunk(markdown);
 
         var checkpoint = await _checkpointRepo.GetByBookIdAsync(bookId, cancellationToken);
-        var resumeFromIndex = checkpoint?.Status == "complete"
+        var resumeFromIndex = checkpoint?.Status == IngestionStatus.Complete
             ? throw new InvalidOperationException($"Book '{bookId}' is already fully indexed.")
             : (checkpoint?.LastChunkIndex ?? -1) + 1;
 
@@ -107,7 +107,7 @@ public sealed class BookIndexer
 
             if (indexed % _checkpointInterval == 0)
             {
-                await SaveCheckpointAsync(bookId, allChunks.Count, indexed, i, "in_progress", cancellationToken);
+                await SaveCheckpointAsync(bookId, allChunks.Count, indexed, i, IngestionStatus.InProgress, cancellationToken);
                 _logger.LogInformation("Checkpoint saved: {Indexed}/{Total} chunks", indexed, allChunks.Count);
             }
         }

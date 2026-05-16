@@ -83,8 +83,8 @@ public abstract class RagPluginBase
 
     private static LanguageFilter ParseLanguage(string language) => language.ToLowerInvariant() switch
     {
-        LanguageCodes.English or "english" => LanguageFilter.English,
-        LanguageCodes.Bulgarian or "bulgarian" => LanguageFilter.Bulgarian,
+        LanguageCodes.English or LanguageCodes.EnglishName => LanguageFilter.English,
+        LanguageCodes.Bulgarian or LanguageCodes.BulgarianName => LanguageFilter.Bulgarian,
         _ => LanguageFilter.Both
     };
 }

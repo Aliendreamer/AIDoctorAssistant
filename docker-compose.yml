@@ -6,7 +6,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:8080
       - VectorStore__Qdrant__Endpoint=http://qdrant:6334
       - AI__ModelProvider=ollama
@@ -29,7 +29,7 @@ services:
       ollama:
         condition: service_started
       otel-collector:
-        condition: service_healthy
+        condition: service_started
     networks:
       - medassist-net
 
@@ -38,7 +38,7 @@ services:
       context: .
       dockerfile: MedAssist.Indexer/Dockerfile
     environment:
-      - DOTNET_ENVIRONMENT=Production
+      - DOTNET_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - VectorStore__Qdrant__Endpoint=http://qdrant:6334
       - Database__ConnectionString=Host=postgres;Database=medassist;Username=medassist;Password=medassist
       - Models__Path=/models
@@ -80,7 +80,11 @@ services:
     volumes:
       - qdrant-data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c 'echo > /dev/tcp/localhost/6333 && echo > /dev/tcp/localhost/6334' 2>/dev/null || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -118,11 +122,6 @@ services:
     volumes:
       - ./docker/otel-collector/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:13133/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     depends_on:
       - tempo
     networks:
@@ -135,7 +134,7 @@ services:
       - "9095:9095"    # gRPC
     volumes:
       - ./docker/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
-      - tempo-data:/tmp/tempo
+      - tempo-data:/var/tempo
     command: ["-config.file=/etc/tempo.yaml"]
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3200/ready || exit 1"]

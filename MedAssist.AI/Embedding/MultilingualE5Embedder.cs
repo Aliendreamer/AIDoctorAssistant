@@ -1,3 +1,4 @@
+using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
@@ -10,21 +11,23 @@ public sealed class MultilingualE5Embedder : IEmbedder, IDisposable
     private readonly InferenceSession _session;
     private readonly BertTokenizer _tokenizer;
     private const int _maxTokens = 512;
+    private const string _queryPrefix = "query: ";
+    private const string _passagePrefix = "passage: ";
 
     public MultilingualE5Embedder(string modelDirectory)
     {
-        var modelPath = Path.Combine(modelDirectory, "model.onnx");
-        var tokenizerPath = Path.Combine(modelDirectory, "tokenizer.json");
+        var modelPath = Path.Combine(modelDirectory, OnnxConstants.Files.ModelOnnx);
+        var tokenizerPath = Path.Combine(modelDirectory, OnnxConstants.Files.TokenizerJson);
 
         _session = new InferenceSession(modelPath, new SessionOptions());
         _tokenizer = BertTokenizer.Create(tokenizerPath);
     }
 
     public Task<float[]> EmbedQueryAsync(string text, CancellationToken cancellationToken = default)
-        => Task.FromResult(Embed("query: " + text));
+        => Task.FromResult(Embed(_queryPrefix + text));
 
     public Task<float[]> EmbedPassageAsync(string text, CancellationToken cancellationToken = default)
-        => Task.FromResult(Embed("passage: " + text));
+        => Task.FromResult(Embed(_passagePrefix + text));
 
     private float[] Embed(string text)
     {
@@ -40,13 +43,13 @@ public sealed class MultilingualE5Embedder : IEmbedder, IDisposable
 
         var inputs = new List<NamedOnnxValue>
         {
-            NamedOnnxValue.CreateFromTensor("input_ids", inputIdsTensor),
-            NamedOnnxValue.CreateFromTensor("attention_mask", attentionMaskTensor),
-            NamedOnnxValue.CreateFromTensor("token_type_ids", tokenTypeIdsTensor),
+            NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.InputIds, inputIdsTensor),
+            NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.AttentionMask, attentionMaskTensor),
+            NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.TokenTypeIds, tokenTypeIdsTensor),
         };
 
         using var outputs = _session.Run(inputs);
-        var lastHiddenState = outputs.First(o => o.Name == "last_hidden_state").AsEnumerable<float>().ToArray();
+        var lastHiddenState = outputs.First(o => o.Name == OnnxConstants.Outputs.LastHiddenState).AsEnumerable<float>().ToArray();
 
         // Mean pooling over sequence dimension
         int hiddenSize = lastHiddenState.Length / seqLen;

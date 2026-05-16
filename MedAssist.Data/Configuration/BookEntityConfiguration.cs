@@ -1,4 +1,5 @@
 using MedAssist.Data.Entities;
+using MedAssist.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -16,7 +17,7 @@ public sealed class BookEntityConfiguration : IEntityTypeConfiguration<BookEntit
         builder.Property(e => e.Language).HasColumnName("language").IsRequired();
         builder.Property(e => e.Edition).HasColumnName("edition").HasDefaultValue(string.Empty);
         builder.Property(e => e.TotalChunks).HasColumnName("total_chunks").HasDefaultValue(0);
-        builder.Property(e => e.Status).HasColumnName("status").HasDefaultValue("pending");
+        builder.Property(e => e.Status).HasColumnName("status").HasDefaultValue(IngestionStatus.Pending);
         builder.Property(e => e.IndexedAt).HasColumnName("indexed_at");
     }
 }

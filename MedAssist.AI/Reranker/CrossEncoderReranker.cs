@@ -1,3 +1,4 @@
+using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 using Microsoft.ML.OnnxRuntime;
@@ -14,8 +15,8 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
 
     public CrossEncoderReranker(string modelDirectory)
     {
-        var modelPath = Path.Combine(modelDirectory, "model.onnx");
-        var tokenizerPath = Path.Combine(modelDirectory, "tokenizer.json");
+        var modelPath = Path.Combine(modelDirectory, OnnxConstants.Files.ModelOnnx);
+        var tokenizerPath = Path.Combine(modelDirectory, OnnxConstants.Files.TokenizerJson);
 
         _session = new InferenceSession(modelPath, new SessionOptions());
         _tokenizer = BertTokenizer.Create(tokenizerPath);
@@ -78,13 +79,13 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
 
         var inputs = new List<NamedOnnxValue>
         {
-            NamedOnnxValue.CreateFromTensor("input_ids", new DenseTensor<long>(inputIds, [1, seqLen])),
-            NamedOnnxValue.CreateFromTensor("attention_mask", new DenseTensor<long>(attentionMask, [1, seqLen])),
-            NamedOnnxValue.CreateFromTensor("token_type_ids", new DenseTensor<long>(tokenTypeIds, [1, seqLen])),
+            NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.InputIds, new DenseTensor<long>(inputIds, [1, seqLen])),
+            NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.AttentionMask, new DenseTensor<long>(attentionMask, [1, seqLen])),
+            NamedOnnxValue.CreateFromTensor(OnnxConstants.Inputs.TokenTypeIds, new DenseTensor<long>(tokenTypeIds, [1, seqLen])),
         };
 
         using var outputs = _session.Run(inputs);
-        return outputs.First(o => o.Name == "logits").AsEnumerable<float>().First();
+        return outputs.First(o => o.Name == OnnxConstants.Outputs.Logits).AsEnumerable<float>().First();
     }
 
     public void Dispose() => _session.Dispose();

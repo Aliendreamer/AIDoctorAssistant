@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
+using Microsoft.Extensions.FileProviders;
 
 namespace MedAssist.AI.Extensions;
 
@@ -17,10 +18,13 @@ public static class SharedConfigurationExtensions
             return builder;
         }
 
+        var fileProvider = new PhysicalFileProvider(configDir);
+
         // Insert at 0 = lowest priority; environment variables and secrets still win
         builder.Sources.Insert(0, new JsonConfigurationSource
         {
-            Path = Path.Combine(configDir, _sharedFileName),
+            Path = _sharedFileName,
+            FileProvider = fileProvider,
             Optional = true,
             ReloadOnChange = false
         });
@@ -32,7 +36,8 @@ public static class SharedConfigurationExtensions
 
         builder.Sources.Insert(1, new JsonConfigurationSource
         {
-            Path = Path.Combine(configDir, string.Format(_envFilePattern, environment)),
+            Path = string.Format(_envFilePattern, environment),
+            FileProvider = fileProvider,
             Optional = true,
             ReloadOnChange = false
         });

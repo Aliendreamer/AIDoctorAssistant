@@ -1,3 +1,4 @@
+using MedAssist.Shared.Constants;
 using Microsoft.Extensions.Logging;
 
 namespace MedAssist.AI.Embedding;
@@ -12,19 +13,19 @@ public sealed class ModelInitializer
 
     private static readonly (string RemotePath, string LocalFile)[] _modelFiles =
     [
-        ($"{_hfBase}/onnx/model.onnx", "model.onnx"),
-        ($"{_hfBase}/onnx/model.onnx_data", "model.onnx_data"),
-        ($"{_hfBase}/tokenizer.json", "tokenizer.json"),
-        ($"{_hfBase}/tokenizer_config.json", "tokenizer_config.json"),
-        ($"{_hfBase}/special_tokens_map.json", "special_tokens_map.json"),
+        ($"{_hfBase}/onnx/{OnnxConstants.Files.ModelOnnx}", OnnxConstants.Files.ModelOnnx),
+        ($"{_hfBase}/onnx/{OnnxConstants.Files.ModelOnnxData}", OnnxConstants.Files.ModelOnnxData),
+        ($"{_hfBase}/{OnnxConstants.Files.TokenizerJson}", OnnxConstants.Files.TokenizerJson),
+        ($"{_hfBase}/{OnnxConstants.Files.TokenizerConfigJson}", OnnxConstants.Files.TokenizerConfigJson),
+        ($"{_hfBase}/{OnnxConstants.Files.SpecialTokensMapJson}", OnnxConstants.Files.SpecialTokensMapJson),
     ];
 
     private static readonly (string RemotePath, string LocalFile)[] _rerankerModelFiles =
     [
-        ($"{_rerankerHfBase}/onnx/model.onnx", "model.onnx"),
-        ($"{_rerankerHfBase}/tokenizer.json", "tokenizer.json"),
-        ($"{_rerankerHfBase}/tokenizer_config.json", "tokenizer_config.json"),
-        ($"{_rerankerHfBase}/special_tokens_map.json", "special_tokens_map.json"),
+        ($"{_rerankerHfBase}/onnx/{OnnxConstants.Files.ModelOnnx}", OnnxConstants.Files.ModelOnnx),
+        ($"{_rerankerHfBase}/{OnnxConstants.Files.TokenizerJson}", OnnxConstants.Files.TokenizerJson),
+        ($"{_rerankerHfBase}/{OnnxConstants.Files.TokenizerConfigJson}", OnnxConstants.Files.TokenizerConfigJson),
+        ($"{_rerankerHfBase}/{OnnxConstants.Files.SpecialTokensMapJson}", OnnxConstants.Files.SpecialTokensMapJson),
     ];
 
     public ModelInitializer(HttpClient httpClient, ILogger<ModelInitializer> logger)

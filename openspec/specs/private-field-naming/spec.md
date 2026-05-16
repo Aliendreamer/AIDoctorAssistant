@@ -36,3 +36,10 @@ Running `dotnet format --verify-no-changes` (without `--diagnostics` filter) SHA
 - **WHEN** `dotnet format MedAssist.slnx --verify-no-changes` is executed
 - **THEN** no WHITESPACE errors appear for the three previously-affected files
 
+### Requirement: LanguageCodes exposes display-name constants
+`MedAssist.Shared.Constants.LanguageCodes` SHALL add `EnglishName` (`"english"`) and `BulgarianName` (`"bulgarian"`) alongside the existing short-code constants `English` (`"en"`) and `Bulgarian` (`"bg"`).
+
+#### Scenario: RagPluginBase switch arms use display-name constants
+- **WHEN** `RagPluginBase.ParseLanguage` evaluates a language string
+- **THEN** the `"english"` and `"bulgarian"` switch arms SHALL reference `LanguageCodes.EnglishName` and `LanguageCodes.BulgarianName` respectively
+

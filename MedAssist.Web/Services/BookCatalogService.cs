@@ -1,4 +1,5 @@
 using MedAssist.Data;
+using MedAssist.Shared.Constants;
 using MedAssist.Shared.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,7 +17,7 @@ public sealed class BookCatalogService
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
         var books = await db.Books
-            .Where(b => b.Status == "indexed")
+            .Where(b => b.Status == IngestionStatus.Indexed)
             .OrderBy(b => b.Title)
             .ToListAsync(cancellationToken);
 

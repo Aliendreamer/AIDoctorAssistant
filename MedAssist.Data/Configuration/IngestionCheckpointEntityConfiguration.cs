@@ -1,4 +1,5 @@
 using MedAssist.Data.Entities;
+using MedAssist.Shared.Constants;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -14,7 +15,7 @@ public sealed class IngestionCheckpointEntityConfiguration : IEntityTypeConfigur
         builder.Property(e => e.TotalChunks).HasColumnName("total_chunks").HasDefaultValue(0);
         builder.Property(e => e.IndexedChunks).HasColumnName("indexed_chunks").HasDefaultValue(0);
         builder.Property(e => e.LastChunkIndex).HasColumnName("last_chunk_index").HasDefaultValue(-1);
-        builder.Property(e => e.Status).HasColumnName("status").HasDefaultValue("in_progress");
+        builder.Property(e => e.Status).HasColumnName("status").HasDefaultValue(IngestionStatus.InProgress);
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
     }
 }

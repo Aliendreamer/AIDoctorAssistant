@@ -15,7 +15,7 @@ COPY MedAssist.Shared/ MedAssist.Shared/
 COPY MedAssist.Data/ MedAssist.Data/
 COPY MedAssist.AI/ MedAssist.AI/
 COPY MedAssist.Indexer/ MedAssist.Indexer/
-RUN dotnet publish MedAssist.Indexer/MedAssist.Indexer.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish MedAssist.Indexer/MedAssist.Indexer.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
