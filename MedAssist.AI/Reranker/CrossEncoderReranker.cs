@@ -22,14 +22,14 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
         _tokenizer = BertTokenizer.Create(vocabPath);
     }
 
-    public async Task<IReadOnlyList<MedicalChunk>> RerankAsync(
+    public async Task<IReadOnlyList<ScoredChunk>> RerankAsync(
         string query,
         IReadOnlyList<MedicalChunk> candidates,
         CancellationToken cancellationToken = default)
     {
         if (candidates.Count == 0)
         {
-            return candidates;
+            return [];
         }
 
         var scores = new float[candidates.Count];
@@ -47,30 +47,23 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
             });
 
         return candidates
-            .Select((chunk, i) => (chunk, scores[i]))
-            .OrderByDescending(x => x.Item2)
-            .Select(x => x.chunk)
+            .Select((chunk, i) => new ScoredChunk(chunk, scores[i]))
+            .OrderByDescending(x => x.Score)
             .ToList();
     }
 
     private float Score(string query, string passage)
     {
-        // Encode as [CLS] query [SEP] passage [SEP], each part from BertTokenizer
         var queryIds = _tokenizer.EncodeToIds(query, _maxTokens, out _, out _);
-
-        // passageBudget: passage encoding can use at most (_maxTokens - queryIds.Count + 1) tokens
-        // because we skip the leading [CLS] from the passage encoding before combining
         var passageBudget = Math.Max(3, _maxTokens - queryIds.Count + 1);
         var passageIds = _tokenizer.EncodeToIds(passage, passageBudget, out _, out _);
 
-        // Combined: queryIds + passageIds.Skip(1) = [CLS] q... [SEP] p... [SEP]
         var combined = queryIds.Concat(passageIds.Skip(1)).ToArray();
         var seqLen = combined.Length;
 
         var inputIds = combined.Select(id => (long)id).ToArray();
         var attentionMask = inputIds.Select(_ => 1L).ToArray();
 
-        // Token type IDs: 0 for query segment, 1 for passage segment
         var tokenTypeIds = new long[seqLen];
         for (var i = queryIds.Count; i < seqLen; i++)
         {

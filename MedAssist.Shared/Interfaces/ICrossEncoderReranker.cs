@@ -4,7 +4,7 @@ namespace MedAssist.Shared.Interfaces;
 
 public interface ICrossEncoderReranker
 {
-    Task<IReadOnlyList<MedicalChunk>> RerankAsync(
+    Task<IReadOnlyList<ScoredChunk>> RerankAsync(
         string query,
         IReadOnlyList<MedicalChunk> candidates,
         CancellationToken cancellationToken = default);

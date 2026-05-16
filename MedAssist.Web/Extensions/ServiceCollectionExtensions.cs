@@ -9,6 +9,7 @@ using MedAssist.AI.VectorStore;
 using MedAssist.Data;
 using MedAssist.Data.Repositories;
 using MedAssist.Shared.Interfaces;
+using MedAssist.Shared.Models;
 using MedAssist.Web.Services;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
@@ -56,13 +57,20 @@ internal static class ServiceCollectionExtensions
         var rerankerPath = configuration["Models:RerankerPath"] ?? "models/ms-marco-MiniLM-L-6-v2";
         services.AddSingleton<ICrossEncoderReranker>(_ => new CrossEncoderReranker(rerankerPath));
 
+        var ragOptions = new RagOptions
+        {
+            ConfidenceThreshold = configuration.GetValue<float>("Rag:ConfidenceThreshold", 0.0f),
+            MaxIterations = Math.Min(configuration.GetValue<int>("Rag:MaxIterations", 2), 5)
+        };
+
         services.AddSingleton(sp => AI.Kernel.KernelFactory.Build(
             configuration,
             sp.GetRequiredService<IMedicalDictionary>(),
             sp.GetRequiredService<IVectorStore>(),
             sp.GetRequiredService<IEmbedder>(),
             sp.GetRequiredService<ISparseVectorizer>(),
-            sp.GetRequiredService<ICrossEncoderReranker>()));
+            sp.GetRequiredService<ICrossEncoderReranker>(),
+            ragOptions));
 
         // Indexing pipeline
         var doclingEndpoint = configuration["Docling:Endpoint"] ?? "http://docling:5001";

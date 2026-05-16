@@ -16,29 +16,53 @@ public sealed class MedicalDictionaryService : IMedicalDictionary
     public async Task<IReadOnlyList<string>> ExpandQueryAsync(string query, CancellationToken cancellationToken = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        var queryLower = query.ToLowerInvariant();
-
-        var illnesses = await db.Illnesses
-            .Include(i => i.Aliases)
-            .Where(i =>
-                i.NameEn.ToLower() == queryLower ||
-                i.NameBg.ToLower() == queryLower ||
-                i.Aliases.Any(a => a.Alias.ToLower() == queryLower))
-            .ToListAsync(cancellationToken);
 
         var terms = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { query };
-        foreach (var illness in illnesses)
+
+        // Add meaningful keywords as independent search terms so dense+sparse search runs on each
+        // (e.g. "болест на гравес" → also search with "гравес" alone)
+        foreach (var word in ExtractKeywords(query))
         {
-            terms.Add(illness.NameEn);
-            terms.Add(illness.NameBg);
-            foreach (var alias in illness.Aliases)
+            terms.Add(word);
+        }
+
+        // Expand any term via dictionary if entries exist
+        foreach (var term in terms.ToList())
+        {
+            var termLower = term.ToLowerInvariant();
+            var illnesses = await db.Illnesses
+                .Include(i => i.Aliases)
+                .Where(i =>
+                    i.NameEn.ToLower() == termLower ||
+                    i.NameBg.ToLower() == termLower ||
+                    i.Aliases.Any(a => a.Alias.ToLower() == termLower))
+                .ToListAsync(cancellationToken);
+
+            foreach (var illness in illnesses)
             {
-                terms.Add(alias.Alias);
+                terms.Add(illness.NameEn);
+                terms.Add(illness.NameBg);
+                foreach (var alias in illness.Aliases)
+                {
+                    terms.Add(alias.Alias);
+                }
             }
         }
 
         return [.. terms];
     }
+
+    private static readonly HashSet<string> _stopwords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "на", "е", "и", "с", "в", "от", "до", "се", "за", "при", "са", "ли",
+        "да", "не", "то", "ще", "или", "но", "само", "те", "тя", "си",
+        "болест", "заболяване", "симптом", "признак",
+        "the", "a", "an", "of", "and", "or", "is", "are", "was", "what", "which", "how"
+    };
+
+    private static IEnumerable<string> ExtractKeywords(string query)
+        => query.Split([' ', ',', '.', '?', '!', '-', '(', ')'], StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length > 3 && !_stopwords.Contains(w));
 
     public async Task<IllnessEntry?> GetByIcdAsync(string icdCode, CancellationToken cancellationToken = default)
     {

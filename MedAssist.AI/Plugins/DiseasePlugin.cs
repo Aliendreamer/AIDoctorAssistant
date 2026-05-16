@@ -6,8 +6,14 @@ namespace MedAssist.AI.Plugins;
 
 public sealed class DiseasePlugin : RagPluginBase
 {
-    public DiseasePlugin(IMedicalDictionary dictionary, IVectorStore vectorStore, IEmbedder embedder, ISparseVectorizer sparseVectorizer, ICrossEncoderReranker reranker)
-        : base(dictionary, vectorStore, embedder, sparseVectorizer, reranker)
+    public DiseasePlugin(
+        IMedicalDictionary dictionary,
+        IVectorStore vectorStore,
+        IEmbedder embedder,
+        ISparseVectorizer sparseVectorizer,
+        ICrossEncoderReranker reranker,
+        RagOptions options)
+        : base(dictionary, vectorStore, embedder, sparseVectorizer, reranker, options)
     {
     }
 
