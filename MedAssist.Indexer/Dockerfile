@@ -1,12 +1,18 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+COPY Directory.Build.props .
+COPY Directory.Build.targets .
+COPY Directory.Packages.props .
+
 COPY MedAssist.Shared/MedAssist.Shared.csproj MedAssist.Shared/
+COPY MedAssist.Data/MedAssist.Data.csproj MedAssist.Data/
 COPY MedAssist.AI/MedAssist.AI.csproj MedAssist.AI/
 COPY MedAssist.Indexer/MedAssist.Indexer.csproj MedAssist.Indexer/
 RUN dotnet restore MedAssist.Indexer/MedAssist.Indexer.csproj
 
 COPY MedAssist.Shared/ MedAssist.Shared/
+COPY MedAssist.Data/ MedAssist.Data/
 COPY MedAssist.AI/ MedAssist.AI/
 COPY MedAssist.Indexer/ MedAssist.Indexer/
 RUN dotnet publish MedAssist.Indexer/MedAssist.Indexer.csproj -c Release -o /app/publish --no-restore
