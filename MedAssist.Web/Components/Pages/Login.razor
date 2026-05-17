@@ -1,0 +1,86 @@
+@page "/login"
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using System.Security.Claims
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+
+<PageTitle>MedAssist — Login</PageTitle>
+
+<div class="login-container">
+    <div class="login-card">
+        <h1 class="login-title">MedAssist</h1>
+        <p class="login-subtitle">Medical Knowledge Assistant</p>
+
+        <form method="post" @formname="login" @onsubmit="HandleLogin">
+            <AntiforgeryToken />
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <input id="username" name="username" type="text" class="form-control"
+                       @bind="_username" autocomplete="username" required />
+            </div>
+
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input id="password" name="password" type="password" class="form-control"
+                       @bind="_password" autocomplete="current-password" required />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Sign in</button>
+        </form>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+    private string? _error;
+
+    private async Task HandleLogin()
+    {
+        if (HttpContext is null)
+        {
+            _error = "Login requires server-side rendering.";
+            return;
+        }
+
+        var users = Configuration.GetSection("Auth:Users").Get<UserCredential[]>() ?? [];
+        var user = Array.Find(users, u =>
+            string.Equals(u.Username, _username, StringComparison.OrdinalIgnoreCase) &&
+            u.Password == _password);
+
+        if (user is null)
+        {
+            _error = "Invalid username or password.";
+            return;
+        }
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Name, user.Username),
+            new(ClaimTypes.Role, user.Role)
+        };
+
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(identity);
+
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+        Navigation.NavigateTo("/query", forceLoad: true);
+    }
+
+    private sealed class UserCredential
+    {
+        public string Username { get; init; } = string.Empty;
+        public string Password { get; init; } = string.Empty;
+        public string Role { get; init; } = string.Empty;
+    }
+}

@@ -1,6 +1,9 @@
 using FastEndpoints;
-using FastEndpoints.Security;
 using FastEndpoints.Swagger;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using MedAssist.AI.Dictionary;
 using MedAssist.AI.Embedding;
 using MedAssist.AI.Ingestion;
@@ -100,6 +103,10 @@ internal static class ServiceCollectionExtensions
                 options.Retry.MaxRetryAttempts = 2;
                 options.Retry.Delay = TimeSpan.FromMilliseconds(300);
             });
+
+        services.AddScoped<AdminBookService>();
+        services.AddHttpClient<AdminBookService>();
+
         services.AddFastEndpoints();
         return services;
     }
@@ -110,16 +117,39 @@ internal static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("Auth:Jwt:SecretKey is not configured");
         var issuer = configuration["Auth:Jwt:Issuer"] ?? "medassist";
         var audience = configuration["Auth:Jwt:Audience"] ?? "medassist-api";
+        var expiryMinutes = configuration.GetValue<int>("Auth:Jwt:ExpiryMinutes", 480);
 
-        services.AddAuthenticationJwtBearer(
-            signingOptions: s => { s.SigningKey = secretKey; },
-            bearerOptions: o =>
+        // Policy scheme: API paths use JWT bearer; all other paths (Blazor) use cookies.
+        services.AddAuthentication(options =>
+        {
+            options.DefaultScheme = "Smart";
+            options.DefaultChallengeScheme = "Smart";
+        })
+        .AddPolicyScheme("Smart", displayName: null, options =>
+        {
+            options.ForwardDefaultSelector = ctx =>
+                ctx.Request.Path.StartsWithSegments("/api")
+                    ? JwtBearerDefaults.AuthenticationScheme
+                    : CookieAuthenticationDefaults.AuthenticationScheme;
+        })
+        .AddCookie(options =>
+        {
+            options.LoginPath = "/login";
+            options.ExpireTimeSpan = TimeSpan.FromMinutes(expiryMinutes);
+            options.SlidingExpiration = true;
+        })
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
             {
-                o.TokenValidationParameters.ValidIssuer = issuer;
-                o.TokenValidationParameters.ValidAudience = audience;
-                o.TokenValidationParameters.ValidateIssuer = true;
-                o.TokenValidationParameters.ValidateAudience = true;
-            });
+                ValidIssuer = issuer,
+                ValidAudience = audience,
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+            };
+        });
 
         services.AddAuthorization();
         return services;

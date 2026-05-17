@@ -1,6 +1,8 @@
 @page "/query"
 @using MedAssist.Shared.Models
 @using MedAssist.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Doctor,Admin")]
 @inject QueryService QueryService
 @inject BookCatalogService BookCatalogService
 @rendermode InteractiveServer

@@ -1,0 +1,150 @@
+@page "/admin/books/upload"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using MedAssist.Web.Services
+@attribute [Authorize(Roles = "Admin")]
+@layout AdminLayout
+@inject AdminBookService AdminBooks
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>MedAssist — Upload Book</PageTitle>
+
+<h1>Upload Book</h1>
+
+@if (_success)
+{
+    <div class="alert alert-success">
+        Book uploaded successfully. <a href="/admin/books">Back to Books</a>
+    </div>
+}
+else
+{
+    <EditForm Model="_model" OnValidSubmit="HandleUpload" class="needs-validation">
+        <DataAnnotationsValidator />
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        <div class="mb-3">
+            <label class="form-label">Book ID <small class="text-muted">(unique identifier, e.g. pediatrics-bg-2023)</small></label>
+            <InputText class="form-control" @bind-Value="_model.BookId" />
+            <ValidationMessage For="() => _model.BookId" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Title</label>
+            <InputText class="form-control" @bind-Value="_model.Title" />
+            <ValidationMessage For="() => _model.Title" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Author</label>
+            <InputText class="form-control" @bind-Value="_model.Author" />
+            <ValidationMessage For="() => _model.Author" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Language</label>
+            <InputSelect class="form-select" @bind-Value="_model.Language">
+                <option value="en">English</option>
+                <option value="bg">Bulgarian</option>
+            </InputSelect>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Edition</label>
+            <InputText class="form-control" @bind-Value="_model.Edition" placeholder="e.g. 3rd" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">PDF File</label>
+            <InputFile OnChange="OnFileSelected" accept=".pdf" class="form-control" />
+            @if (_fileName is null && _submitted)
+            {
+                <div class="text-danger">Please select a PDF file.</div>
+            }
+        </div>
+
+        <button type="submit" class="btn btn-primary" disabled="@_uploading">
+            @if (_uploading)
+            {
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Uploading...</span>
+            }
+            else
+            {
+                <span>Upload</span>
+            }
+        </button>
+        <a href="/admin/books" class="btn btn-outline-secondary ms-2">Cancel</a>
+    </EditForm>
+}
+
+@code {
+    private UploadModel _model = new();
+    private IBrowserFile? _file;
+    private string? _fileName;
+    private bool _uploading;
+    private bool _success;
+    private bool _submitted;
+    private string? _error;
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _file = e.File;
+        _fileName = e.File.Name;
+    }
+
+    private async Task HandleUpload()
+    {
+        _submitted = true;
+        if (_file is null)
+        {
+            return;
+        }
+
+        _uploading = true;
+        _error = null;
+
+        try
+        {
+            await using var stream = _file.OpenReadStream(maxAllowedSize: 200 * 1024 * 1024);
+            var (success, message) = await AdminBooks.UploadBookAsync(
+                _model.BookId, _model.Title, _model.Author,
+                _model.Language, _model.Edition,
+                stream, _fileName!);
+
+            if (success)
+            {
+                _success = true;
+            }
+            else
+            {
+                _error = message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Upload failed: {ex.Message}";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private sealed class UploadModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string BookId { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Title { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Required]
+        public string Author { get; set; } = string.Empty;
+        public string Language { get; set; } = "en";
+        public string Edition { get; set; } = string.Empty;
+    }
+}
