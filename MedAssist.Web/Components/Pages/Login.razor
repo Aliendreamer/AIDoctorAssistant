@@ -23,14 +23,14 @@
 
             <div class="mb-3">
                 <label for="username" class="form-label">Username</label>
-                <input id="username" name="username" type="text" class="form-control"
-                       @bind="_username" autocomplete="username" required />
+                <input id="username" name="_username" type="text" class="form-control"
+                       value="@_username" autocomplete="username" required />
             </div>
 
             <div class="mb-3">
                 <label for="password" class="form-label">Password</label>
-                <input id="password" name="password" type="password" class="form-control"
-                       @bind="_password" autocomplete="current-password" required />
+                <input id="password" name="_password" type="password" class="form-control"
+                       autocomplete="current-password" required />
             </div>
 
             <button type="submit" class="btn btn-primary w-100">Sign in</button>
@@ -42,8 +42,12 @@
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
-    private string _username = string.Empty;
-    private string _password = string.Empty;
+    [SupplyParameterFromForm]
+    private string? _username { get; set; }
+
+    [SupplyParameterFromForm]
+    private string? _password { get; set; }
+
     private string? _error;
 
     private async Task HandleLogin()
@@ -54,9 +58,9 @@
             return;
         }
 
-        var user = await UserRepo.FindByUsernameAsync(_username);
+        var user = await UserRepo.FindByUsernameAsync(_username ?? string.Empty);
 
-        if (user is null || !UserRepo.VerifyPassword(user, _password))
+        if (user is null || !UserRepo.VerifyPassword(user, _password ?? string.Empty))
         {
             _error = "Invalid username or password.";
             return;
