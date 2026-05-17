@@ -22,8 +22,6 @@ appsettings.Local.json
 ## Models (downloaded at runtime)
 models/
 
-## Books (uploaded at runtime, not source code)
-books/
 
 ## Docker
 docker-compose.override.yml
