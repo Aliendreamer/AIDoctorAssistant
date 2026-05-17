@@ -10,7 +10,7 @@ public sealed class Bm25StatsEntityConfiguration : IEntityTypeConfiguration<Bm25
     {
         builder.ToTable("bm25_stats");
         builder.HasKey(e => e.Id);
-        builder.Property(e => e.Id).HasColumnName("id").UseIdentityAlwaysColumn();
+        builder.Property(e => e.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(e => e.TotalDocuments).HasColumnName("total_documents").HasDefaultValue(0);
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
     }
