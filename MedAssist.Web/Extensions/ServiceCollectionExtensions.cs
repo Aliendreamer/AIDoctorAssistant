@@ -15,6 +15,7 @@ using MedAssist.Web.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -115,6 +116,33 @@ internal static class ServiceCollectionExtensions
 
         services.AddScoped<AdminBookService>();
         services.AddScoped<AdminUserService>();
+
+        services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+        {
+            options.MultipartBodyLengthLimit = 300 * 1024 * 1024; // 300 MB
+            options.ValueLengthLimit = int.MaxValue;
+        });
+
+        services.AddRequestTimeouts(options =>
+        {
+            options.DefaultPolicy = new Microsoft.AspNetCore.Http.Timeouts.RequestTimeoutPolicy
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+            options.AddPolicy("upload", new Microsoft.AspNetCore.Http.Timeouts.RequestTimeoutPolicy
+            {
+                Timeout = TimeSpan.FromMinutes(5)
+            });
+        });
+
+        services.AddResponseCompression(opts =>
+        {
+            opts.EnableForHttps = true;
+            opts.Providers.Add<BrotliCompressionProvider>();
+            opts.Providers.Add<GzipCompressionProvider>();
+            opts.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(
+                ["application/json", "text/html"]);
+        });
 
         services.AddFastEndpoints();
         return services;

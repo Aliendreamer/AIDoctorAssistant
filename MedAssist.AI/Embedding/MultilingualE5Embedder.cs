@@ -11,6 +11,7 @@ public sealed class MultilingualE5Embedder : IEmbedder, IDisposable
 {
     private readonly InferenceSession _session;
     private readonly UnigramTokenizer _tokenizer;
+    private readonly SemaphoreSlim _inferenceGate = new(Environment.ProcessorCount, Environment.ProcessorCount);
     private const int _maxTokens = 512;
     private const string _queryPrefix = "query: ";
     private const string _passagePrefix = "passage: ";
@@ -24,11 +25,19 @@ public sealed class MultilingualE5Embedder : IEmbedder, IDisposable
         _tokenizer = new UnigramTokenizer(tokenizerPath);
     }
 
-    public Task<float[]> EmbedQueryAsync(string text, CancellationToken cancellationToken = default)
-        => Task.FromResult(Embed(_queryPrefix + text));
+    public async Task<float[]> EmbedQueryAsync(string text, CancellationToken cancellationToken = default)
+    {
+        await _inferenceGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { return Embed(_queryPrefix + text); }
+        finally { _inferenceGate.Release(); }
+    }
 
-    public Task<float[]> EmbedPassageAsync(string text, CancellationToken cancellationToken = default)
-        => Task.FromResult(Embed(_passagePrefix + text));
+    public async Task<float[]> EmbedPassageAsync(string text, CancellationToken cancellationToken = default)
+    {
+        await _inferenceGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { return Embed(_passagePrefix + text); }
+        finally { _inferenceGate.Release(); }
+    }
 
     private float[] Embed(string text)
     {
@@ -78,7 +87,11 @@ public sealed class MultilingualE5Embedder : IEmbedder, IDisposable
         return norm < 1e-8f ? vector : Array.ConvertAll(vector, v => v / norm);
     }
 
-    public void Dispose() => _session.Dispose();
+    public void Dispose()
+    {
+        _session.Dispose();
+        _inferenceGate.Dispose();
+    }
 
     // SentencePiece Unigram tokenizer loaded from HuggingFace tokenizer.json.
     // Uses Viterbi segmentation to find the highest-score tokenization.

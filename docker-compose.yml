@@ -56,6 +56,8 @@ services:
       - PGADMIN_DEFAULT_PASSWORD=medassist
     ports:
       - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
     networks:
       - medassist-net
 
@@ -175,6 +177,7 @@ services:
 
 volumes:
   postgres-data:
+  pgadmin-data:
   qdrant-data:
   ollama-models:
   prometheus-data:

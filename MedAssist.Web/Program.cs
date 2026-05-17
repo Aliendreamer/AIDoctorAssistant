@@ -4,11 +4,21 @@ using MedAssist.AI.Extensions;
 using MedAssist.Web.Components;
 using MedAssist.Web.Extensions;
 using MedAssist.Web.Startup;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
 
+int cpuCount = Environment.ProcessorCount;
+ThreadPool.SetMinThreads(workerThreads: 4 * cpuCount, completionPortThreads: 4 * cpuCount);
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MinRequestBodyDataRate = new MinDataRate(bytesPerSecond: 100, gracePeriod: TimeSpan.FromSeconds(5));
+    options.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(65);
+});
 builder.Configuration.AddSharedConfiguration();
 builder.Host.UseSerilog((ctx, cfg) => cfg.ReadFrom.Configuration(ctx.Configuration));
 
@@ -49,8 +59,10 @@ app.MapScalarApiReference(o => o
     .WithOpenApiRoutePattern("/swagger/v1/swagger.json")
     .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient));
 
+app.UseResponseCompression();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRequestTimeouts();
 app.UseFastEndpoints();
 
 app.UseAntiforgery();

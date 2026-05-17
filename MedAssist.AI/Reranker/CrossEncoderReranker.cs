@@ -11,6 +11,7 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
 {
     private readonly InferenceSession _session;
     private readonly BertTokenizer _tokenizer;
+    private readonly SemaphoreSlim _inferenceGate = new(Environment.ProcessorCount, Environment.ProcessorCount);
     private const int _maxTokens = 512;
 
     public CrossEncoderReranker(string modelDirectory)
@@ -35,15 +36,12 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
         var scores = new float[candidates.Count];
         await Parallel.ForEachAsync(
             Enumerable.Range(0, candidates.Count),
-            new ParallelOptions
+            new ParallelOptions { CancellationToken = cancellationToken },
+            async (i, ct) =>
             {
-                MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2),
-                CancellationToken = cancellationToken
-            },
-            (i, _) =>
-            {
-                scores[i] = Score(query, candidates[i].Text);
-                return ValueTask.CompletedTask;
+                await _inferenceGate.WaitAsync(ct).ConfigureAwait(false);
+                try { scores[i] = Score(query, candidates[i].Text); }
+                finally { _inferenceGate.Release(); }
             });
 
         return candidates
@@ -81,5 +79,9 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
         return outputs.First(o => o.Name == OnnxConstants.Outputs.Logits).AsEnumerable<float>().First();
     }
 
-    public void Dispose() => _session.Dispose();
+    public void Dispose()
+    {
+        _session.Dispose();
+        _inferenceGate.Dispose();
+    }
 }

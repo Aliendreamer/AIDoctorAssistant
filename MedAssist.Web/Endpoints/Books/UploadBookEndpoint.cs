@@ -2,6 +2,7 @@ using FastEndpoints;
 using MedAssist.Data;
 using MedAssist.Data.Entities;
 using MedAssist.Shared.Constants;
+using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +26,7 @@ public sealed class UploadBookResponse
     public string Message { get; init; } = string.Empty;
 }
 
+[RequestTimeout("upload")]
 public sealed class UploadBookEndpoint(
     IDbContextFactory<MedAssistDbContext> dbFactory,
     IConfiguration configuration) : Endpoint<UploadBookRequest, UploadBookResponse>
@@ -34,7 +36,7 @@ public sealed class UploadBookEndpoint(
         Post("/api/admin/books/upload");
         Roles("Admin");
         AllowFileUploads();
-        Options(x => x.WithMetadata(new RequestSizeLimitAttribute(250 * 1024 * 1024)));
+        Options(x => x.WithMetadata(new RequestSizeLimitAttribute(300 * 1024 * 1024)));
     }
 
     public override async Task HandleAsync(UploadBookRequest req, CancellationToken ct)
