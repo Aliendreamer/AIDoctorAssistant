@@ -1,9 +1,10 @@
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using MedAssist.AI.Extensions;
-using Scalar.AspNetCore;
 using MedAssist.Web.Components;
 using MedAssist.Web.Extensions;
+using MedAssist.Web.Startup;
+using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
 
@@ -28,6 +29,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 await app.MigrateDbAsync();
+await app.SeedUsersAsync();
 await app.EnsureModelsReadyAsync();
 
 app.UseOpenTelemetryPrometheusScrapingEndpoint();

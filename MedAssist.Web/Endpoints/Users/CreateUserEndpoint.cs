@@ -1,0 +1,51 @@
+using FastEndpoints;
+using MedAssist.Web.Data;
+using Microsoft.EntityFrameworkCore;
+
+namespace MedAssist.Web.Endpoints.Users;
+
+public sealed class CreateUserRequest
+{
+    public string Username { get; init; } = string.Empty;
+    public string Role { get; init; } = string.Empty;
+    public string Password { get; init; } = string.Empty;
+}
+
+public sealed class CreateUserEndpoint : Endpoint<CreateUserRequest>
+{
+    private readonly UserRepository _users;
+
+    public CreateUserEndpoint(UserRepository users) => _users = users;
+
+    public override void Configure()
+    {
+        Post("/api/admin/users");
+        Roles("Admin");
+    }
+
+    public override async Task HandleAsync(CreateUserRequest req, CancellationToken ct)
+    {
+        if (req.Password.Length < 8)
+        {
+            await HttpContext.Response.SendAsync("Password must be at least 8 characters.", 400, cancellation: ct);
+            return;
+        }
+
+        if (req.Role is not "Admin" and not "Doctor")
+        {
+            await HttpContext.Response.SendAsync("Role must be Admin or Doctor.", 400, cancellation: ct);
+            return;
+        }
+
+        try
+        {
+            var user = await _users.CreateAsync(req.Username, req.Role, req.Password, ct);
+            var dto = new UserDto(user.Id, user.Username, user.Role, user.CreatedAt);
+            await HttpContext.Response.SendAsync(dto, 201, cancellation: ct);
+        }
+        catch (DbUpdateException)
+        {
+            await HttpContext.Response.SendAsync("A user with that username already exists.", 409, cancellation: ct);
+        }
+    }
+}

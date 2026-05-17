@@ -2,7 +2,8 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
 @using System.Security.Claims
-@inject IConfiguration Configuration
+@using MedAssist.Web.Data
+@inject UserRepository UserRepo
 @inject NavigationManager Navigation
 
 <PageTitle>MedAssist — Login</PageTitle>
@@ -53,12 +54,9 @@
             return;
         }
 
-        var users = Configuration.GetSection("Auth:Users").Get<UserCredential[]>() ?? [];
-        var user = Array.Find(users, u =>
-            string.Equals(u.Username, _username, StringComparison.OrdinalIgnoreCase) &&
-            u.Password == _password);
+        var user = await UserRepo.FindByUsernameAsync(_username);
 
-        if (user is null)
+        if (user is null || !UserRepo.VerifyPassword(user, _password))
         {
             _error = "Invalid username or password.";
             return;
@@ -75,12 +73,5 @@
 
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
         Navigation.NavigateTo("/query", forceLoad: true);
-    }
-
-    private sealed class UserCredential
-    {
-        public string Username { get; init; } = string.Empty;
-        public string Password { get; init; } = string.Empty;
-        public string Role { get; init; } = string.Empty;
     }
 }

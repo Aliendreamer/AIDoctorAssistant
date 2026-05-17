@@ -1,0 +1,118 @@
+@page "/admin/users/create"
+@using Microsoft.AspNetCore.Authorization
+@using MedAssist.Web.Services
+@attribute [Authorize(Roles = "Admin")]
+@layout AdminLayout
+@inject AdminUserService AdminUsers
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>MedAssist — Create User</PageTitle>
+
+<h1>Create User</h1>
+
+@if (_success)
+{
+    <div class="alert alert-success">
+        User created successfully. <a href="/admin/users">Back to Users</a>
+    </div>
+}
+else
+{
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    <div class="mb-3">
+        <label class="form-label">Username</label>
+        <input type="text" class="form-control" @bind="_username" />
+        @if (_submitted && string.IsNullOrWhiteSpace(_username))
+        {
+            <div class="text-danger">Username is required.</div>
+        }
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Role</label>
+        <select class="form-select" @bind="_role">
+            <option value="Doctor">Doctor</option>
+            <option value="Admin">Admin</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Password <small class="text-muted">(min 8 characters)</small></label>
+        <input type="password" class="form-control" @bind="_password" />
+        @if (_submitted && _password.Length < 8)
+        {
+            <div class="text-danger">Password must be at least 8 characters.</div>
+        }
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Confirm Password</label>
+        <input type="password" class="form-control" @bind="_confirm" />
+        @if (_submitted && _password != _confirm)
+        {
+            <div class="text-danger">Passwords do not match.</div>
+        }
+    </div>
+
+    <button class="btn btn-primary" @onclick="HandleCreate" disabled="@_saving">
+        @if (_saving)
+        {
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            <span>Creating...</span>
+        }
+        else
+        {
+            <span>Create</span>
+        }
+    </button>
+    <a href="/admin/users" class="btn btn-outline-secondary ms-2">Cancel</a>
+}
+
+@code {
+    private string _username = string.Empty;
+    private string _role = "Doctor";
+    private string _password = string.Empty;
+    private string _confirm = string.Empty;
+    private bool _saving;
+    private bool _submitted;
+    private bool _success;
+    private string? _error;
+
+    private async Task HandleCreate()
+    {
+        _submitted = true;
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_username) || _password.Length < 8 || _password != _confirm)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var (success, message) = await AdminUsers.CreateUserAsync(_username, _role, _password);
+            if (success)
+            {
+                _success = true;
+            }
+            else
+            {
+                _error = message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to create user: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

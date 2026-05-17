@@ -1,20 +1,23 @@
 using FastEndpoints;
 using FastEndpoints.Swagger;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using MedAssist.AI.Dictionary;
 using MedAssist.AI.Embedding;
 using MedAssist.AI.Ingestion;
 using MedAssist.AI.Reranker;
 using MedAssist.AI.VectorStore;
 using MedAssist.Data;
+using MedAssist.Data.Entities;
 using MedAssist.Data.Repositories;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
+using MedAssist.Web.Data;
 using MedAssist.Web.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -35,6 +38,9 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<BookCatalogService>();
         services.AddSingleton<IMedicalDictionary, MedicalDictionaryService>();
         services.AddSingleton<IBM25VocabStore, BM25VocabService>();
+
+        services.AddSingleton<IPasswordHasher<UserEntity>, PasswordHasher<UserEntity>>();
+        services.AddTransient<UserRepository>();
 
         return services;
     }
@@ -104,8 +110,11 @@ internal static class ServiceCollectionExtensions
                 options.Retry.Delay = TimeSpan.FromMilliseconds(300);
             });
 
+        services.AddScoped<AdminApiClient>();
+        services.AddHttpClient<AdminApiClient>();
+
         services.AddScoped<AdminBookService>();
-        services.AddHttpClient<AdminBookService>();
+        services.AddScoped<AdminUserService>();
 
         services.AddFastEndpoints();
         return services;

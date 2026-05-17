@@ -1,6 +1,7 @@
 using FastEndpoints;
 using FastEndpoints.Security;
 using MedAssist.Shared.Models;
+using MedAssist.Web.Data;
 using System.Security.Claims;
 
 namespace MedAssist.Web.Endpoints.Auth;
@@ -8,10 +9,12 @@ namespace MedAssist.Web.Endpoints.Auth;
 public sealed class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
 {
     private readonly IConfiguration _configuration;
+    private readonly UserRepository _users;
 
-    public LoginEndpoint(IConfiguration configuration)
+    public LoginEndpoint(IConfiguration configuration, UserRepository users)
     {
         _configuration = configuration;
+        _users = users;
     }
 
     public override void Configure()
@@ -22,12 +25,9 @@ public sealed class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
 
     public override async Task HandleAsync(LoginRequest req, CancellationToken ct)
     {
-        var users = _configuration.GetSection("Auth:Users").Get<UserCredential[]>() ?? [];
-        var user = Array.Find(users, u =>
-            string.Equals(u.Username, req.Username, StringComparison.OrdinalIgnoreCase) &&
-            u.Password == req.Password);
+        var user = await _users.FindByUsernameAsync(req.Username, ct);
 
-        if (user is null)
+        if (user is null || !_users.VerifyPassword(user, req.Password))
         {
             await HttpContext.Response.SendUnauthorizedAsync(ct);
             return;
@@ -57,11 +57,4 @@ public sealed class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
             Role = user.Role
         }, cancellation: ct);
     }
-}
-
-internal sealed class UserCredential
-{
-    public string Username { get; init; } = string.Empty;
-    public string Password { get; init; } = string.Empty;
-    public string Role { get; init; } = string.Empty;
 }
