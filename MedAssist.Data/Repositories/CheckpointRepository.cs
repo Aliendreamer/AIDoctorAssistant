@@ -1,5 +1,5 @@
 using MedAssist.Data.Entities;
-using Microsoft.EntityFrameworkCore;
+using MedAssist.Shared.Models;
 
 namespace MedAssist.Data.Repositories;
 
@@ -8,18 +8,13 @@ public sealed record IngestionCheckpoint(
     int TotalChunks,
     int IndexedChunks,
     int LastChunkIndex,
-    string Status,
+    BookStatus Status,
     DateTimeOffset UpdatedAt);
 
-public sealed class CheckpointRepository
+public sealed class CheckpointRepository(MedAssistDbContext db)
 {
-    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
-
-    public CheckpointRepository(IDbContextFactory<MedAssistDbContext> dbFactory) => _dbFactory = dbFactory;
-
     public async Task UpsertAsync(IngestionCheckpoint checkpoint, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var existing = await db.IngestionCheckpoints.FindAsync([checkpoint.BookId], cancellationToken);
         if (existing is not null)
         {
@@ -47,7 +42,6 @@ public sealed class CheckpointRepository
 
     public async Task DeleteAsync(string bookId, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var entity = await db.IngestionCheckpoints.FindAsync([bookId], cancellationToken);
         if (entity is not null)
         {
@@ -58,7 +52,6 @@ public sealed class CheckpointRepository
 
     public async Task<IngestionCheckpoint?> GetByBookIdAsync(string bookId, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var entity = await db.IngestionCheckpoints.FindAsync([bookId], cancellationToken);
         if (entity is null)
         {

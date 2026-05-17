@@ -22,6 +22,6 @@ public sealed class ListBooksEndpoint : EndpointWithoutRequest<IReadOnlyList<Boo
     public override async Task HandleAsync(CancellationToken ct)
     {
         var books = await _bookCatalog.GetAllBooksAsync(ct);
-        await HttpContext.Response.SendAsync(books, cancellation: ct);
+        await Send.OkAsync(books, cancellation: ct);
     }
 }

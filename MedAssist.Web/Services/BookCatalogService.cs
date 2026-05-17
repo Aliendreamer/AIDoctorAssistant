@@ -1,23 +1,15 @@
 using MedAssist.Data;
-using MedAssist.Shared.Constants;
 using MedAssist.Shared.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Web.Services;
 
-public sealed class BookCatalogService
+public sealed class BookCatalogService(MedAssistDbContext db)
 {
-    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
-
-    public BookCatalogService(IDbContextFactory<MedAssistDbContext> dbFactory)
-        => _dbFactory = dbFactory;
-
     public async Task<IReadOnlyList<BookInfo>> GetAllBooksAsync(CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-
         var books = await db.Books
-            .Where(b => b.Status == IngestionStatus.Indexed)
+            .Where(b => b.Status == BookStatus.Indexed)
             .OrderBy(b => b.Title)
             .ToListAsync(cancellationToken);
 
@@ -31,7 +23,7 @@ public sealed class BookCatalogService
             Edition = b.Edition,
             FilePath = b.FilePath,
             TotalChunks = b.TotalChunks,
-            Status = Enum.Parse<BookStatus>(b.Status, ignoreCase: true),
+            Status = b.Status,
             IndexedAt = b.IndexedAt
         }).ToList();
     }

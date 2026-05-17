@@ -1,3 +1,4 @@
+using System.Text;
 using FastEndpoints;
 using FastEndpoints.Swagger;
 using MedAssist.AI.Dictionary;
@@ -18,7 +19,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -30,18 +30,17 @@ internal static class ServiceCollectionExtensions
 {
     internal static IServiceCollection AddDataServices(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration["Database:ConnectionString"]
-            ?? throw new InvalidOperationException("Database:ConnectionString is not configured");
+        services.AddDbContext<MedAssistDbContext>(opt =>
+            opt.UseNpgsql(configuration.GetConnectionString("Postgres"),
+                o => o.SetPostgresVersion(17, 0).MapEnum<BookStatus>("book_status"))
+               .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
-        services.AddDbContextFactory<MedAssistDbContext>(options =>
-            options.UseNpgsql(connectionString));
-
-        services.AddSingleton<BookCatalogService>();
-        services.AddSingleton<IMedicalDictionary, MedicalDictionaryService>();
-        services.AddSingleton<IBM25VocabStore, BM25VocabService>();
+        services.AddScoped<BookCatalogService>();
+        services.AddScoped<IMedicalDictionary, MedicalDictionaryService>();
+        services.AddScoped<IBM25VocabStore, BM25VocabService>();
 
         services.AddSingleton<IPasswordHasher<UserEntity>, PasswordHasher<UserEntity>>();
-        services.AddTransient<UserRepository>();
+        services.AddScoped<UserRepository>();
 
         return services;
     }
@@ -55,17 +54,17 @@ internal static class ServiceCollectionExtensions
         {
             client.Timeout = TimeSpan.FromMinutes(15);
         });
-        services.AddSingleton<IEmbedder>(_ => new MultilingualE5Embedder(modelDir));
+        services.AddScoped<IEmbedder>(_ => new MultilingualE5Embedder(modelDir));
 
         var qdrantEndpoint = configuration["VectorStore:Qdrant:Endpoint"] ?? "http://localhost:6333";
         var qdrantUri = new Uri(qdrantEndpoint);
-        services.AddSingleton(_ => new QdrantClient(qdrantUri.Host, qdrantUri.Port));
-        services.AddSingleton<IVectorStore, QdrantVectorStore>();
+        services.AddScoped(_ => new QdrantClient(qdrantUri.Host, qdrantUri.Port));
+        services.AddScoped<IVectorStore, QdrantVectorStore>();
 
-        services.AddSingleton<ISparseVectorizer, SparseVectorizer>();
+        services.AddScoped<ISparseVectorizer, SparseVectorizer>();
 
         var rerankerPath = configuration["Models:RerankerPath"] ?? "models/ms-marco-MiniLM-L-6-v2";
-        services.AddSingleton<ICrossEncoderReranker>(_ => new CrossEncoderReranker(rerankerPath));
+        services.AddScoped<ICrossEncoderReranker>(_ => new CrossEncoderReranker(rerankerPath));
 
         var ragOptions = new RagOptions
         {
@@ -73,7 +72,7 @@ internal static class ServiceCollectionExtensions
             MaxIterations = Math.Min(configuration.GetValue<int>("Rag:MaxIterations", 2), 5)
         };
 
-        services.AddSingleton(sp => AI.Kernel.KernelFactory.Build(
+        services.AddScoped(sp => AI.Kernel.KernelFactory.Build(
             configuration,
             sp.GetRequiredService<IMedicalDictionary>(),
             sp.GetRequiredService<IVectorStore>(),
@@ -119,7 +118,7 @@ internal static class ServiceCollectionExtensions
 
         services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
         {
-            options.MultipartBodyLengthLimit = 300 * 1024 * 1024; // 300 MB
+            options.MultipartBodyLengthLimit = 764 * 1024 * 1024; // 764 MB
             options.ValueLengthLimit = int.MaxValue;
         });
 

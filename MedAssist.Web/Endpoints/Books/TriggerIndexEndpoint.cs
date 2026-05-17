@@ -3,6 +3,7 @@ using MedAssist.AI.Ingestion;
 using MedAssist.Data;
 using MedAssist.Data.Repositories;
 using MedAssist.Shared.Interfaces;
+using MedAssist.Shared.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Web.Endpoints.Books;
@@ -11,11 +12,13 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<TriggerIndexEndpoint> _logger;
+    private readonly MedAssistDbContext _medAssistDbContext;
 
-    public TriggerIndexEndpoint(IServiceScopeFactory scopeFactory, ILogger<TriggerIndexEndpoint> logger)
+    public TriggerIndexEndpoint(IServiceScopeFactory scopeFactory, ILogger<TriggerIndexEndpoint> logger, MedAssistDbContext medAssistDbContext)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _medAssistDbContext = medAssistDbContext;
     }
 
     public override void Configure()
@@ -28,10 +31,7 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
     {
         if (!int.TryParse(Query<string>("id"), out var id) || id <= 0)
         {
-            await HttpContext.Response.SendAsync(
-                new { message = "Query parameter 'id' must be a positive integer." },
-                statusCode: 400,
-                cancellation: ct);
+            await Send.ResponseAsync(new { message = "Query parameter 'id' must be a positive integer." }, 400, ct);
             return;
         }
 
@@ -41,32 +41,30 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
 
         if (book is null || !File.Exists(book.FilePath))
         {
-            await HttpContext.Response.SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        if (book.Status == Shared.Models.BookStatus.InProgress)
+        if (book.Status == BookStatus.InProgress)
         {
-            await HttpContext.Response.SendAsync(
-                new { message = $"Book '{book.BookId}' is already being indexed." },
-                statusCode: 409,
-                cancellation: ct);
+            await Send.ResponseAsync(new { message = $"Book '{book.BookId}' is already being indexed." }, 409, ct);
             return;
         }
+
+        var checkpointRepo = scope.ServiceProvider.GetRequiredService<CheckpointRepository>();
 
         var force = Query<string>("force")?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
         if (force)
         {
-            var vectorStore = HttpContext.RequestServices.GetRequiredService<IVectorStore>();
-            var checkpointRepo = HttpContext.RequestServices.GetRequiredService<CheckpointRepository>();
-            var dbFactory = HttpContext.RequestServices.GetRequiredService<IDbContextFactory<MedAssistDbContext>>();
+            var vectorStore = scope.ServiceProvider.GetRequiredService<IVectorStore>();
             await vectorStore.DeleteCollectionAsync(ct);
-            await checkpointRepo.DeleteAsync(book.BookId, ct);
-            await using var db = await dbFactory.CreateDbContextAsync(ct);
-            await db.Bm25Vocab.ExecuteDeleteAsync(ct);
-            await db.Bm25Stats.ExecuteDeleteAsync(ct);
-            _logger.LogInformation("Force re-index: cleared Qdrant, checkpoint, and BM25 vocab for {BookId}", book.BookId);
+            await _medAssistDbContext.Bm25Vocab.ExecuteDeleteAsync(ct);
+            await _medAssistDbContext.Bm25Stats.ExecuteDeleteAsync(ct);
+            _logger.LogInformation("Force re-index: cleared Qdrant and BM25 vocab for {BookId}", book.BookId);
         }
+
+        // Always clear the checkpoint so a previous complete/partial run doesn't block re-indexing.
+        await checkpointRepo.DeleteAsync(book.BookId, ct);
 
         var pdfPath = book.FilePath;
         var bookId = book.BookId;
@@ -104,12 +102,27 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Background indexing failed for {BookId}", bookId);
+                try
+                {
+                    await using var failScope = _scopeFactory.CreateAsyncScope();
+                    var failRepo = failScope.ServiceProvider.GetRequiredService<BookRepository>();
+                    await failRepo.UpsertAsync(new BookInfo
+                    {
+                        BookId = bookId,
+                        Title = book.Title,
+                        Author = book.Author,
+                        Language = book.Language,
+                        Edition = book.Edition,
+                        Status = BookStatus.Failed
+                    }, CancellationToken.None);
+                }
+                catch (Exception innerEx)
+                {
+                    _logger.LogError(innerEx, "Failed to update book status to Failed for {BookId}", bookId);
+                }
             }
         }, CancellationToken.None);
 
-        await HttpContext.Response.SendAsync(
-            new { message = $"Indexing started for '{book.BookId}'. Check book status for progress." },
-            statusCode: 202,
-            cancellation: ct);
+        await Send.ResponseAsync(new { message = $"Indexing started for '{book.BookId}'. Check book status for progress." }, 202, ct);
     }
 }

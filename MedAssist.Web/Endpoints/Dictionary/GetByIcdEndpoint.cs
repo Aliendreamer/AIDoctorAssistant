@@ -29,10 +29,10 @@ public sealed class GetByIcdEndpoint : Endpoint<GetByIcdRequest, IllnessEntry>
         var entry = await _dictionary.GetByIcdAsync(req.Icd, ct);
         if (entry is null)
         {
-            await HttpContext.Response.SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
-        await HttpContext.Response.SendAsync(entry, cancellation: ct);
+        await Send.OkAsync(entry, ct);
     }
 }

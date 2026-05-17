@@ -15,6 +15,6 @@ public sealed class LogoutEndpoint : EndpointWithoutRequest
     public override async Task HandleAsync(CancellationToken ct)
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        await HttpContext.Response.SendRedirectAsync("/login", isPermanent: false);
+        await Send.RedirectAsync("/login", isPermanent: false);
     }
 }

@@ -19,7 +19,7 @@ public sealed class DeleteUserEndpoint : EndpointWithoutRequest
     {
         if (!Guid.TryParse(Route<string>("id"), out var id))
         {
-            await HttpContext.Response.SendAsync("Invalid user id.", 400, cancellation: ct);
+            await Send.ResponseAsync("Invalid user id.", 400, ct);
             return;
         }
 
@@ -28,7 +28,7 @@ public sealed class DeleteUserEndpoint : EndpointWithoutRequest
 
         if (target is null)
         {
-            await HttpContext.Response.SendNotFoundAsync(ct);
+            await Send.NotFoundAsync(ct);
             return;
         }
 
@@ -37,12 +37,12 @@ public sealed class DeleteUserEndpoint : EndpointWithoutRequest
             var adminCount = await _users.CountAdminsAsync(ct);
             if (adminCount <= 1)
             {
-                await HttpContext.Response.SendAsync("Cannot delete the last Admin account.", 409, cancellation: ct);
+                await Send.ResponseAsync("Cannot delete the last Admin account.", 409, ct);
                 return;
             }
         }
 
         await _users.DeleteAsync(id, ct);
-        await HttpContext.Response.SendNoContentAsync(ct);
+        await Send.NoContentAsync(ct);
     }
 }

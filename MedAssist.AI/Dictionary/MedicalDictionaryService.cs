@@ -6,16 +6,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.AI.Dictionary;
 
-public sealed class MedicalDictionaryService : IMedicalDictionary
+public sealed class MedicalDictionaryService(MedAssistDbContext medAssistDbContext) : IMedicalDictionary
 {
-    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
-
-    public MedicalDictionaryService(IDbContextFactory<MedAssistDbContext> dbFactory)
-        => _dbFactory = dbFactory;
-
+    private readonly MedAssistDbContext _medAssistDbContext = medAssistDbContext;
     public async Task<IReadOnlyList<string>> ExpandQueryAsync(string query, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
         var terms = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { query };
 
@@ -30,7 +25,7 @@ public sealed class MedicalDictionaryService : IMedicalDictionary
         foreach (var term in terms.ToList())
         {
             var termLower = term.ToLowerInvariant();
-            var illnesses = await db.Illnesses
+            var illnesses = await _medAssistDbContext.Illnesses
                 .Include(i => i.Aliases)
                 .Where(i =>
                     i.NameEn.ToLower() == termLower ||
@@ -66,23 +61,22 @@ public sealed class MedicalDictionaryService : IMedicalDictionary
 
     public async Task<IllnessEntry?> GetByIcdAsync(string icdCode, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+
         var icdUpper = icdCode.ToUpperInvariant();
 
-        var illness = await db.Illnesses
+        var illness = await _medAssistDbContext.Illnesses
             .Include(i => i.Aliases)
-            .FirstOrDefaultAsync(i => i.IcdCode.ToUpper() == icdUpper, cancellationToken);
+            .FirstOrDefaultAsync(i => i.IcdCode.Equals(icdUpper, StringComparison.CurrentCultureIgnoreCase), cancellationToken);
 
         return illness is null ? null : MapToEntry(illness);
     }
 
     public async Task<IReadOnlyList<IllnessEntry>> SearchAsync(string query, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var queryLower = query.ToLowerInvariant();
         var queryUpper = query.ToUpperInvariant();
 
-        var illnesses = await db.Illnesses
+        var illnesses = await _medAssistDbContext.Illnesses
             .Include(i => i.Aliases)
             .Where(i =>
                 i.NameEn.ToLower().Contains(queryLower) ||
@@ -97,8 +91,7 @@ public sealed class MedicalDictionaryService : IMedicalDictionary
 
     public async Task<IReadOnlyList<IllnessEntry>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        var illnesses = await db.Illnesses
+        var illnesses = await _medAssistDbContext.Illnesses
             .Include(i => i.Aliases)
             .OrderBy(i => i.NameEn)
             .ToListAsync(cancellationToken);

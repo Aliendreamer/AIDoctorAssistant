@@ -1,3 +1,4 @@
+using MedAssist.Shared.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -8,7 +9,7 @@ public sealed class MedAssistDbContextFactory : IDesignTimeDbContextFactory<MedA
     public MedAssistDbContext CreateDbContext(string[] args)
     {
         var options = new DbContextOptionsBuilder<MedAssistDbContext>()
-            .UseNpgsql("Host=localhost;Database=medassist;Username=medassist;Password=medassist")
+            .UseNpgsql("Host=postgres;Database=medassist;Username=medassist;Password=medassist", p => p.MapEnum<BookStatus>("book_status"))
             .Options;
         return new MedAssistDbContext(options);
     }

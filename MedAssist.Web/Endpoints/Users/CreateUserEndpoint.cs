@@ -27,13 +27,13 @@ public sealed class CreateUserEndpoint : Endpoint<CreateUserRequest>
     {
         if (req.Password.Length < 8)
         {
-            await HttpContext.Response.SendAsync("Password must be at least 8 characters.", 400, cancellation: ct);
+            await Send.ResponseAsync("Password must be at least 8 characters.", 400, ct);
             return;
         }
 
         if (req.Role is not "Admin" and not "Doctor")
         {
-            await HttpContext.Response.SendAsync("Role must be Admin or Doctor.", 400, cancellation: ct);
+            await Send.ResponseAsync("Role must be Admin or Doctor.", 400, ct);
             return;
         }
 
@@ -41,11 +41,11 @@ public sealed class CreateUserEndpoint : Endpoint<CreateUserRequest>
         {
             var user = await _users.CreateAsync(req.Username, req.Role, req.Password, ct);
             var dto = new UserDto(user.Id, user.Username, user.Role, user.CreatedAt);
-            await HttpContext.Response.SendAsync(dto, 201, cancellation: ct);
+            await Send.ResponseAsync(dto, 201, ct);
         }
         catch (DbUpdateException)
         {
-            await HttpContext.Response.SendAsync("A user with that username already exists.", 409, cancellation: ct);
+            await Send.ResponseAsync("A user with that username already exists.", 409, ct);
         }
     }
 }

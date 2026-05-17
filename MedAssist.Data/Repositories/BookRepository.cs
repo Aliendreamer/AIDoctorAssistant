@@ -4,15 +4,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Data.Repositories;
 
-public sealed class BookRepository
+public sealed class BookRepository(MedAssistDbContext db)
 {
-    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
-
-    public BookRepository(IDbContextFactory<MedAssistDbContext> dbFactory) => _dbFactory = dbFactory;
-
     public async Task UpsertAsync(BookInfo book, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var existing = await db.Books.FirstOrDefaultAsync(b => b.BookId == book.BookId, cancellationToken);
         if (existing is not null)
         {
@@ -25,7 +20,7 @@ public sealed class BookRepository
                 existing.FilePath = book.FilePath;
             }
             existing.TotalChunks = book.TotalChunks;
-            existing.Status = book.Status.ToString().ToLowerInvariant();
+            existing.Status = book.Status;
             existing.IndexedAt = book.IndexedAt;
         }
         else
@@ -39,7 +34,7 @@ public sealed class BookRepository
                 Edition = book.Edition,
                 FilePath = book.FilePath,
                 TotalChunks = book.TotalChunks,
-                Status = book.Status.ToString().ToLowerInvariant(),
+                Status = book.Status,
                 IndexedAt = book.IndexedAt
             });
         }
@@ -49,14 +44,12 @@ public sealed class BookRepository
 
     public async Task<BookInfo?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var entity = await db.Books.FindAsync([id], cancellationToken);
         return entity is null ? null : MapToInfo(entity);
     }
 
     public async Task<BookInfo?> GetByBookIdAsync(string bookId, CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         var entity = await db.Books.FirstOrDefaultAsync(b => b.BookId == bookId, cancellationToken);
         return entity is null ? null : MapToInfo(entity);
     }
@@ -71,7 +64,7 @@ public sealed class BookRepository
         Edition = b.Edition,
         FilePath = b.FilePath,
         TotalChunks = b.TotalChunks,
-        Status = Enum.Parse<BookStatus>(b.Status, ignoreCase: true),
+        Status = b.Status,
         IndexedAt = b.IndexedAt
     };
 }

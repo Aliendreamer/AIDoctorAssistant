@@ -16,5 +16,9 @@ public sealed class MedAssistDbContext : DbContext
     public DbSet<UserEntity> Users => Set<UserEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
-        => modelBuilder.ApplyConfigurationsFromAssembly(typeof(MedAssistDbContext).Assembly);
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.UseIdentityAlwaysColumns();
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(MedAssistDbContext).Assembly);
+    }
 }

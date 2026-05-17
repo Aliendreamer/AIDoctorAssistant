@@ -18,5 +18,6 @@ public enum BookStatus
 {
     Pending,
     InProgress,
-    Indexed
+    Indexed,
+    Failed
 }

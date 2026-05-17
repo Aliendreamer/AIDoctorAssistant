@@ -17,8 +17,7 @@ public sealed class MedicalDictionaryExpandTests : IDisposable
             .Options;
         _db = new MedAssistDbContext(options);
 
-        var factory = new InMemoryDbContextFactory(options);
-        _sut = new MedicalDictionaryService(factory);
+        _sut = new MedicalDictionaryService(_db);
     }
 
     public void Dispose() => _db.Dispose();
@@ -108,12 +107,4 @@ public sealed class MedicalDictionaryExpandTests : IDisposable
         Assert.Equal(result.Count, result.Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
-    private sealed class InMemoryDbContextFactory(DbContextOptions<MedAssistDbContext> options)
-        : IDbContextFactory<MedAssistDbContext>
-    {
-        public MedAssistDbContext CreateDbContext() => new(options);
-
-        public Task<MedAssistDbContext> CreateDbContextAsync(CancellationToken ct = default)
-            => Task.FromResult(new MedAssistDbContext(options));
-    }
 }

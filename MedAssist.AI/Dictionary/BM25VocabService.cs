@@ -6,23 +6,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.AI.Dictionary;
 
-public sealed class BM25VocabService : IBM25VocabStore
+public sealed class BM25VocabService(MedAssistDbContext medAssistDbContext) : IBM25VocabStore
 {
-    private readonly IDbContextFactory<MedAssistDbContext> _dbFactory;
+    private readonly MedAssistDbContext _medAssistDbContext = medAssistDbContext;
 
-    public BM25VocabService(IDbContextFactory<MedAssistDbContext> dbFactory)
-        => _dbFactory = dbFactory;
 
     public async Task<BM25VocabSnapshot> LoadAsync(CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-        var totalDocs = await db.Bm25Stats
+        var totalDocs = await _medAssistDbContext.Bm25Stats
             .Where(s => s.Id == 1)
             .Select(s => s.TotalDocuments)
             .FirstOrDefaultAsync(cancellationToken);
 
-        var vocab = await db.Bm25Vocab
+        var vocab = await _medAssistDbContext.Bm25Vocab
             .AsNoTracking()
             .Where(v => v.DocumentFrequency >= 2)
             .OrderBy(v => v.Id)
@@ -44,8 +41,8 @@ public sealed class BM25VocabService : IBM25VocabStore
 
     public async Task<int> GetTotalDocumentsAsync(CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Bm25Stats
+
+        return await _medAssistDbContext.Bm25Stats
             .Where(s => s.Id == 1)
             .Select(s => s.TotalDocuments)
             .FirstOrDefaultAsync(cancellationToken);
@@ -56,14 +53,14 @@ public sealed class BM25VocabService : IBM25VocabStore
         int totalDocs,
         CancellationToken cancellationToken = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        await using var tx = await _medAssistDbContext.Database.BeginTransactionAsync(cancellationToken);
 
         // Update global stats — one row, no full-table scan
-        var stats = await db.Bm25Stats.FindAsync([1], cancellationToken);
+        var stats = await _medAssistDbContext.Bm25Stats.FindAsync([1], cancellationToken);
         if (stats is null)
         {
-            db.Bm25Stats.Add(new Bm25StatsEntity
+            _medAssistDbContext.Bm25Stats.Add(new Bm25StatsEntity
             {
                 Id = 1,
                 TotalDocuments = totalDocs,
@@ -77,7 +74,7 @@ public sealed class BM25VocabService : IBM25VocabStore
         }
 
         var termKeys = termDfs.Keys.ToList();
-        var existingMap = await db.Bm25Vocab
+        var existingMap = await _medAssistDbContext.Bm25Vocab
             .AsNoTracking()
             .Where(v => termKeys.Contains(v.Term))
             .ToDictionaryAsync(v => v.Term, cancellationToken);
@@ -106,15 +103,15 @@ public sealed class BM25VocabService : IBM25VocabStore
 
         if (toUpdate.Count > 0)
         {
-            db.Bm25Vocab.UpdateRange(toUpdate);
+            _medAssistDbContext.Bm25Vocab.UpdateRange(toUpdate);
         }
 
         if (toAdd.Count > 0)
         {
-            db.Bm25Vocab.AddRange(toAdd);
+            _medAssistDbContext.Bm25Vocab.AddRange(toAdd);
         }
 
-        await db.SaveChangesAsync(cancellationToken);
+        await _medAssistDbContext.SaveChangesAsync(cancellationToken);
         await tx.CommitAsync(cancellationToken);
     }
 

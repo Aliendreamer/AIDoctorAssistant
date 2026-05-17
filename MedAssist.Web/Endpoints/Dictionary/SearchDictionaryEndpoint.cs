@@ -33,6 +33,6 @@ public sealed class SearchDictionaryEndpoint : Endpoint<SearchDictionaryRequest,
         }
 
         var results = await _dictionary.SearchAsync(req.Q, ct);
-        await HttpContext.Response.SendAsync(results, cancellation: ct);
+        await Send.OkAsync(results, ct);
     }
 }

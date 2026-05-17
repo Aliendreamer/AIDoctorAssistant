@@ -1,7 +1,7 @@
 using FastEndpoints;
 using MedAssist.Data;
 using MedAssist.Data.Entities;
-using MedAssist.Shared.Constants;
+using MedAssist.Shared.Models;
 using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -28,15 +28,16 @@ public sealed class UploadBookResponse
 
 [RequestTimeout("upload")]
 public sealed class UploadBookEndpoint(
-    IDbContextFactory<MedAssistDbContext> dbFactory,
+    MedAssistDbContext medAssistDbContext,
     IConfiguration configuration) : Endpoint<UploadBookRequest, UploadBookResponse>
 {
+    private readonly MedAssistDbContext _medAssistDbContext = medAssistDbContext;
     public override void Configure()
     {
         Post("/api/admin/books/upload");
         Roles("Admin");
         AllowFileUploads();
-        Options(x => x.WithMetadata(new RequestSizeLimitAttribute(300 * 1024 * 1024)));
+        Options(x => x.WithMetadata(new RequestSizeLimitAttribute(764 * 1024 * 1024)));
     }
 
     public override async Task HandleAsync(UploadBookRequest req, CancellationToken ct)
@@ -53,9 +54,7 @@ public sealed class UploadBookEndpoint(
             await input.CopyToAsync(fs);
         }
 
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-
-        var existing = await db.Books.FirstOrDefaultAsync(b => b.BookId == req.BookId, ct);
+        var existing = await _medAssistDbContext.Books.FirstOrDefaultAsync(b => b.BookId == req.BookId, ct);
         int id;
         if (existing is not null)
         {
@@ -64,10 +63,10 @@ public sealed class UploadBookEndpoint(
             existing.Language = req.Language;
             existing.Edition = req.Edition;
             existing.FilePath = destPath;
-            existing.Status = IngestionStatus.Pending;
+            existing.Status = BookStatus.Pending;
             existing.TotalChunks = 0;
             existing.IndexedAt = null;
-            await db.SaveChangesAsync(ct);
+            await _medAssistDbContext.SaveChangesAsync(ct);
             id = existing.Id;
         }
         else
@@ -80,18 +79,18 @@ public sealed class UploadBookEndpoint(
                 Language = req.Language,
                 Edition = req.Edition,
                 FilePath = destPath,
-                Status = IngestionStatus.Pending,
+                Status = BookStatus.Pending,
             };
-            db.Books.Add(entity);
-            await db.SaveChangesAsync(ct);
+            _medAssistDbContext.Books.Add(entity);
+            await _medAssistDbContext.SaveChangesAsync(ct);
             id = entity.Id;
         }
 
-        await HttpContext.Response.SendAsync(new UploadBookResponse
+        await Send.OkAsync(new UploadBookResponse
         {
             Id = id,
             BookId = req.BookId,
-            Status = IngestionStatus.Pending,
+            Status = BookStatus.Pending.ToString().ToLowerInvariant(),
             Message = $"Book '{req.Title}' uploaded. POST /api/admin/index?id={id} to index."
         }, cancellation: ct);
     }

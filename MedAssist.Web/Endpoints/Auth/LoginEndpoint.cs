@@ -1,8 +1,8 @@
+using System.Security.Claims;
 using FastEndpoints;
 using FastEndpoints.Security;
 using MedAssist.Shared.Models;
 using MedAssist.Web.Data;
-using System.Security.Claims;
 
 namespace MedAssist.Web.Endpoints.Auth;
 
@@ -29,7 +29,7 @@ public sealed class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
 
         if (user is null || !_users.VerifyPassword(user, req.Password))
         {
-            await HttpContext.Response.SendUnauthorizedAsync(ct);
+            await Send.UnauthorizedAsync(ct);
             return;
         }
 
@@ -50,7 +50,7 @@ public sealed class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
             o.User.Claims.Add(new Claim(ClaimTypes.Name, user.Username));
         });
 
-        await HttpContext.Response.SendAsync(new LoginResponse
+        await Send.OkAsync(new LoginResponse
         {
             Token = token,
             ExpiresAt = new DateTimeOffset(expiresAt, TimeSpan.Zero),

@@ -1,4 +1,4 @@
-using MedAssist.Shared.Constants;
+using MedAssist.Shared.Models;
 
 namespace MedAssist.Data.Entities;
 
@@ -12,6 +12,6 @@ public sealed class BookEntity
     public string Edition { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
     public int TotalChunks { get; set; }
-    public string Status { get; set; } = IngestionStatus.Pending;
+    public BookStatus Status { get; set; } = BookStatus.Pending;
     public DateTimeOffset? IndexedAt { get; set; }
 }

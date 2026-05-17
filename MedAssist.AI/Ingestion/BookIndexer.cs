@@ -1,5 +1,4 @@
 using MedAssist.Data.Repositories;
-using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 using Microsoft.Extensions.Logging;
@@ -53,11 +52,6 @@ public sealed class BookIndexer
         var allChunks = _chunker.Chunk(markdownText);
 
         var checkpoint = await _checkpointRepo.GetByBookIdAsync(bookId, cancellationToken);
-        if (checkpoint?.Status == IngestionStatus.Complete)
-        {
-            throw new InvalidOperationException($"Book '{bookId}' is already fully indexed.");
-        }
-
         var resumeFromIndex = (checkpoint?.LastChunkIndex ?? -1) + 1;
 
         _logger.LogInformation("Indexing book {BookId}: {Total} chunks, resuming from {Start}",
@@ -108,13 +102,13 @@ public sealed class BookIndexer
             if (indexed % _checkpointInterval == 0)
             {
                 await _checkpointRepo.UpsertAsync(new IngestionCheckpoint(
-                    bookId, allChunks.Count, indexed, i, IngestionStatus.InProgress, DateTimeOffset.UtcNow), cancellationToken);
+                    bookId, allChunks.Count, indexed, i, BookStatus.InProgress, DateTimeOffset.UtcNow), cancellationToken);
                 _logger.LogInformation("Checkpoint saved: {Indexed}/{Total} chunks", indexed, allChunks.Count);
             }
         }
 
         await _checkpointRepo.UpsertAsync(new IngestionCheckpoint(
-            bookId, allChunks.Count, allChunks.Count, allChunks.Count - 1, IngestionStatus.Complete, DateTimeOffset.UtcNow), cancellationToken);
+            bookId, allChunks.Count, allChunks.Count, allChunks.Count - 1, BookStatus.Indexed, DateTimeOffset.UtcNow), cancellationToken);
 
         await IndexSectionSummariesAsync(allChunks, bookId, title, author, language, cancellationToken);
         await _vocabBuilder.FlushAsync(cancellationToken);
@@ -142,7 +136,6 @@ public sealed class BookIndexer
         string language,
         CancellationToken cancellationToken)
     {
-        // Group by heading path; first chunk of each group becomes the summary source
         var groups = allChunks
             .Select((c, i) => (c.HeadingPath, c.Text, Index: i))
             .GroupBy(c => c.HeadingPath)

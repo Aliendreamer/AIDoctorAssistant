@@ -21,6 +21,6 @@ public sealed class ListUsersEndpoint : EndpointWithoutRequest<IReadOnlyList<Use
     {
         var users = await _users.ListAsync(ct);
         var dtos = users.Select(u => new UserDto(u.Id, u.Username, u.Role, u.CreatedAt)).ToList();
-        await HttpContext.Response.SendAsync(dtos, cancellation: ct);
+        await Send.OkAsync(dtos, ct);
     }
 }
