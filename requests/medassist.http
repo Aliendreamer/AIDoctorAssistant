@@ -1,9 +1,10 @@
 ### MedAssist API Requests
 ### Base URL: http://localhost:8080
-### Set @token after login
+### Set @token after login, @userId when deleting a user
 
 @baseUrl = http://localhost:8080
 @token = <paste_token_here>
+@userId = <paste_user_uuid_here>
 
 # ─────────────────────────────────────────
 # AUTH
@@ -27,11 +28,14 @@ Content-Type: application/json
   "password": "doctor123"
 }
 
+### Logout (clears session cookie — for browser use; redirects to /login)
+GET {{baseUrl}}/logout
+
 # ─────────────────────────────────────────
 # ADMIN — book management
 # ─────────────────────────────────────────
 
-### Upload a book (PDF) — saves file + registers in DB, returns id; does NOT start indexing
+### Upload a book (PDF) — saves file + registers in DB; does NOT start indexing
 POST {{baseUrl}}/api/admin/books/upload
 Authorization: Bearer {{token}}
 Content-Type: multipart/form-data; boundary=----Boundary
@@ -63,8 +67,46 @@ Content-Type: application/pdf
 < ./my-book.pdf
 ------Boundary--
 
-### Trigger indexing — Docling OCR + RAG pipeline runs in background; use id from upload response
+### Trigger indexing — Docling OCR + RAG pipeline runs in background
 POST {{baseUrl}}/api/admin/index?id=1
+Authorization: Bearer {{token}}
+
+### Trigger indexing (force re-index — clears existing vectors first)
+POST {{baseUrl}}/api/admin/index?id=1&force=true
+Authorization: Bearer {{token}}
+
+# ─────────────────────────────────────────
+# ADMIN — user management
+# ─────────────────────────────────────────
+
+### List all users (Admin role required)
+GET {{baseUrl}}/api/admin/users
+Authorization: Bearer {{token}}
+
+### Create a Doctor account
+POST {{baseUrl}}/api/admin/users
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "username": "dr_petrov",
+  "role": "Doctor",
+  "password": "doctor123"
+}
+
+### Create an Admin account
+POST {{baseUrl}}/api/admin/users
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "username": "admin2",
+  "role": "Admin",
+  "password": "admin123!"
+}
+
+### Delete a user — set @userId to the UUID from List users
+DELETE {{baseUrl}}/api/admin/users/{{userId}}
 Authorization: Bearer {{token}}
 
 # ─────────────────────────────────────────
@@ -104,7 +146,7 @@ Content-Type: application/json
   "webSearchEnabled": false
 }
 
-### Treatment query with web search fallback
+### Treatment query with web search fallback (Bulgarian)
 POST {{baseUrl}}/api/query
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -120,15 +162,15 @@ Content-Type: application/json
 # DICTIONARY
 # ─────────────────────────────────────────
 
-### Lookup by ICD-10 code
+### Lookup by ICD-10 code — Pneumonia
 GET {{baseUrl}}/api/dictionary/J18.9
 Authorization: Bearer {{token}}
 
-### Lookup hypertension
+### Lookup by ICD-10 code — Hypertension
 GET {{baseUrl}}/api/dictionary/I10
 Authorization: Bearer {{token}}
 
-### Lookup type 2 diabetes
+### Lookup by ICD-10 code — Type 2 Diabetes
 GET {{baseUrl}}/api/dictionary/E11
 Authorization: Bearer {{token}}
 

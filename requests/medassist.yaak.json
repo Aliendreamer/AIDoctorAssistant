@@ -1,7 +1,7 @@
 {
   "_type": "export",
   "__export_format": 4,
-  "__export_date": "2026-05-16",
+  "__export_date": "2026-05-17",
   "__export_source": "medassist-api",
   "resources": [
     {
@@ -19,7 +19,8 @@
       "name": "Local",
       "data": {
         "baseUrl": "http://localhost:8080",
-        "token": ""
+        "token": "",
+        "userId": ""
       }
     },
     {
@@ -38,7 +39,13 @@
       "_id": "fld_admin",
       "_type": "request_group",
       "parentId": "wrk_medassist",
-      "name": "Admin"
+      "name": "Admin — Books"
+    },
+    {
+      "_id": "fld_admin_users",
+      "_type": "request_group",
+      "parentId": "wrk_medassist",
+      "name": "Admin — Users"
     },
     {
       "_id": "fld_query",
@@ -93,6 +100,18 @@
       "authentication": {}
     },
     {
+      "_id": "req_logout",
+      "_type": "request",
+      "parentId": "fld_auth",
+      "name": "Logout (clears cookie)",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/logout",
+      "headers": [],
+      "body": { "mimeType": "" },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
       "_id": "req_books_list",
       "_type": "request",
       "parentId": "fld_books",
@@ -102,8 +121,30 @@
       "headers": [
         { "name": "Authorization", "value": "Bearer {{ _.token }}" }
       ],
+      "body": { "mimeType": "" },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_books_upload",
+      "_type": "request",
+      "parentId": "fld_admin",
+      "name": "Upload book PDF",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/admin/books/upload",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
       "body": {
-        "mimeType": ""
+        "mimeType": "multipart/form-data",
+        "params": [
+          { "name": "BookId", "value": "my-book-v1" },
+          { "name": "Title", "value": "My Medical Book" },
+          { "name": "Author", "value": "Author Name" },
+          { "name": "Language", "value": "en" },
+          { "name": "Edition", "value": "1st" },
+          { "name": "File", "value": "", "type": "file", "fileName": "" }
+        ]
       },
       "parameters": [],
       "authentication": {}
@@ -125,26 +166,83 @@
       "authentication": {}
     },
     {
-      "_id": "req_books_upload",
+      "_id": "req_books_index_force",
       "_type": "request",
       "parentId": "fld_admin",
-      "name": "Upload book PDF (no indexing)",
+      "name": "Trigger indexing (force re-index)",
       "method": "POST",
-      "url": "{{ _.baseUrl }}/api/admin/books/upload",
+      "url": "{{ _.baseUrl }}/api/admin/index",
+      "parameters": [
+        { "name": "id", "value": "1" },
+        { "name": "force", "value": "true" }
+      ],
       "headers": [
         { "name": "Authorization", "value": "Bearer {{ _.token }}" }
       ],
+      "body": { "mimeType": "" },
+      "authentication": {}
+    },
+    {
+      "_id": "req_users_list",
+      "_type": "request",
+      "parentId": "fld_admin_users",
+      "name": "List users",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/admin/users",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": { "mimeType": "" },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_users_create_doctor",
+      "_type": "request",
+      "parentId": "fld_admin_users",
+      "name": "Create user (Doctor)",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/admin/users",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
       "body": {
-        "mimeType": "multipart/form-data",
-        "params": [
-          { "name": "BookId", "value": "my-book-v1" },
-          { "name": "Title", "value": "My Medical Book" },
-          { "name": "Author", "value": "Author Name" },
-          { "name": "Language", "value": "en" },
-          { "name": "Edition", "value": "1st" },
-          { "name": "File", "value": "", "type": "file", "fileName": "" }
-        ]
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"dr_ivanov\",\n  \"role\": \"Doctor\",\n  \"password\": \"doctor123\"\n}"
       },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_users_create_admin",
+      "_type": "request",
+      "parentId": "fld_admin_users",
+      "name": "Create user (Admin)",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/admin/users",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"username\": \"admin2\",\n  \"role\": \"Admin\",\n  \"password\": \"admin123!\"\n}"
+      },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_users_delete",
+      "_type": "request",
+      "parentId": "fld_admin_users",
+      "name": "Delete user",
+      "method": "DELETE",
+      "url": "{{ _.baseUrl }}/api/admin/users/{{ _.userId }}",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": { "mimeType": "" },
       "parameters": [],
       "authentication": {}
     },
@@ -212,9 +310,7 @@
       "headers": [
         { "name": "Authorization", "value": "Bearer {{ _.token }}" }
       ],
-      "body": {
-        "mimeType": ""
-      },
+      "body": { "mimeType": "" },
       "parameters": [],
       "authentication": {}
     },
@@ -228,9 +324,7 @@
       "headers": [
         { "name": "Authorization", "value": "Bearer {{ _.token }}" }
       ],
-      "body": {
-        "mimeType": ""
-      },
+      "body": { "mimeType": "" },
       "parameters": [],
       "authentication": {}
     },
@@ -244,9 +338,7 @@
       "headers": [
         { "name": "Authorization", "value": "Bearer {{ _.token }}" }
       ],
-      "body": {
-        "mimeType": ""
-      },
+      "body": { "mimeType": "" },
       "parameters": [],
       "authentication": {}
     },
@@ -260,9 +352,7 @@
       "headers": [
         { "name": "Authorization", "value": "Bearer {{ _.token }}" }
       ],
-      "body": {
-        "mimeType": ""
-      },
+      "body": { "mimeType": "" },
       "parameters": [
         { "name": "q", "value": "pneumonia" }
       ],
@@ -278,9 +368,7 @@
       "headers": [
         { "name": "Authorization", "value": "Bearer {{ _.token }}" }
       ],
-      "body": {
-        "mimeType": ""
-      },
+      "body": { "mimeType": "" },
       "parameters": [
         { "name": "q", "value": "хипертония" }
       ],
@@ -294,9 +382,19 @@
       "method": "GET",
       "url": "{{ _.baseUrl }}/metrics",
       "headers": [],
-      "body": {
-        "mimeType": ""
-      },
+      "body": { "mimeType": "" },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_health",
+      "_type": "request",
+      "parentId": "fld_observability",
+      "name": "Health check",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/health",
+      "headers": [],
+      "body": { "mimeType": "" },
       "parameters": [],
       "authentication": {}
     }
