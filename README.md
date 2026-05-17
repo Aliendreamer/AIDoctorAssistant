@@ -102,7 +102,7 @@ open http://localhost:8080
 
 | Service | URL | Credentials |
 |---|---|---|
-| Web app | http://localhost:8080 | JWT — see Auth section |
+| Web app | http://localhost:8080 | see UI section below |
 | Scalar API docs | http://localhost:8080/scalar/v1 | — |
 | pgAdmin | http://localhost:5050 | `admin@medassist.com` / `medassist` |
 | Grafana | http://localhost:3000 | `admin` / `medassist` |
@@ -112,17 +112,40 @@ open http://localhost:8080
 
 ---
 
-## Authentication
+## UI
 
-The API uses JWT bearer tokens. Default users (configured in `config/appsettings.shared.json`):
+The web UI is at **http://localhost:8080**. All pages require login — navigate there and you will be redirected to the login screen automatically.
+
+### Pages
+
+| Path | Role | Description |
+|---|---|---|
+| `/login` | Public | Sign in with username + password |
+| `/query` | Doctor, Admin | Ask medical questions — select language, query type, and optionally filter by book |
+| `/admin/books` | Admin | List all books, trigger re-indexing per book |
+| `/admin/books/upload` | Admin | Upload a new PDF book |
+| `/admin/users` | Admin | List user accounts, delete users |
+| `/admin/users/create` | Admin | Create a new Doctor or Admin account |
+
+### Default credentials
+
+On first start the app seeds a single Admin account from `config/appsettings.shared.json`:
 
 | Username | Password | Role |
 |---|---|---|
 | `admin` | `medassist123` | Admin |
-| `doctor` | `doctor123` | Doctor |
+
+> The `doctor` user from the old config is **not** auto-seeded. Create doctor accounts through the UI at `/admin/users/create` after logging in as admin.
+
+After the first run, credentials live in the PostgreSQL `users` table (PBKDF2-hashed). Manage them entirely from the admin UI — the config list is only used for the first-run seed.
+
+---
+
+## Authentication
+
+The REST API uses JWT bearer tokens. Obtain one via:
 
 ```bash
-# Obtain a token
 curl -s -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"medassist123"}' | jq .token
@@ -243,14 +266,22 @@ AIDoctorAssistant/
 │   ├── Reranker/           CrossEncoderReranker
 │   └── VectorStore/        QdrantVectorStore
 ├── MedAssist.Web/
-│   ├── Components/         Blazor pages and components
+│   ├── Components/
+│   │   ├── Layout/         MainLayout, AdminLayout, NavMenu
+│   │   ├── Pages/          Login, Home (redirect), Query
+│   │   │   └── Admin/      Books, UploadBook, Users, CreateUser
+│   │   └── Shared/         BookSourceCitation, WebSourceCitation
+│   ├── Data/               UserRepository
 │   ├── Endpoints/
-│   │   ├── Auth/           LoginEndpoint
+│   │   ├── Auth/           LoginEndpoint, LogoutEndpoint
 │   │   ├── Books/          ListBooksEndpoint, UploadBookEndpoint, TriggerIndexEndpoint
 │   │   ├── Dictionary/     GetByIcdEndpoint, SearchDictionaryEndpoint
-│   │   └── Query/          QueryEndpoint
+│   │   ├── Query/          QueryEndpoint
+│   │   └── Users/          ListUsersEndpoint, CreateUserEndpoint, DeleteUserEndpoint
 │   ├── Extensions/         ServiceCollectionExtensions, WebApplicationExtensions
-│   ├── Services/           BookCatalogService, QueryService
+│   ├── Services/           BookCatalogService, QueryService,
+│   │                       AdminApiClient, AdminBookService, AdminUserService
+│   ├── Startup/            UserSeeder
 │   └── Program.cs
 ├── MedAssist.Tests/
 ├── config/
