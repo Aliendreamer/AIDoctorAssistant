@@ -48,5 +48,5 @@
 
 - [x] 9.1 Run `dotnet build MedAssist.slnx` — verify zero warnings and zero errors
 - [x] 9.2 Write unit test `SparseVectorizerTests.cs` in `MedAssist.Tests` — verify Cyrillic tokenisation, BM25 weight non-zero for known terms, empty vector for empty input
-- [ ] 9.3 Smoke-test: run Indexer with `--recreate-collection` against one markdown book, verify Qdrant collection has `"dense"` and `"sparse"` named vectors on a point
-- [ ] 9.4 Smoke-test: run a query through the Web service, confirm hybrid search returns results (check logs for Qdrant response payload)
+- [x] 9.3 Smoke-test: run Indexer with `--recreate-collection` against one markdown book, verify Qdrant collection has `"dense"` and `"sparse"` named vectors on a point
+- [x] 9.4 Smoke-test: run a query through the Web service, confirm hybrid search returns results (check logs for Qdrant response payload)
