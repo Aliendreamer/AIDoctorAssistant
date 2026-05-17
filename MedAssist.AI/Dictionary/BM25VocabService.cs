@@ -17,10 +17,13 @@ public sealed class BM25VocabService : IBM25VocabStore
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-        var totalDocs = await db.Bm25Vocab
-            .MaxAsync(v => (int?)v.TotalDocuments, cancellationToken) ?? 0;
+        var totalDocs = await db.Bm25Stats
+            .Where(s => s.Id == 1)
+            .Select(s => s.TotalDocuments)
+            .FirstOrDefaultAsync(cancellationToken);
 
         var vocab = await db.Bm25Vocab
+            .AsNoTracking()
             .Where(v => v.DocumentFrequency >= 2)
             .OrderBy(v => v.Id)
             .Select(v => new { v.Id, v.Term, v.DocumentFrequency })
@@ -42,7 +45,10 @@ public sealed class BM25VocabService : IBM25VocabStore
     public async Task<int> GetTotalDocumentsAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-        return await db.Bm25Vocab.MaxAsync(v => (int?)v.TotalDocuments, cancellationToken) ?? 0;
+        return await db.Bm25Stats
+            .Where(s => s.Id == 1)
+            .Select(s => s.TotalDocuments)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task UpsertTermsAsync(
@@ -53,10 +59,22 @@ public sealed class BM25VocabService : IBM25VocabStore
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
 
-        await db.Bm25Vocab.ExecuteUpdateAsync(
-            s => s.SetProperty(v => v.TotalDocuments, totalDocs)
-                   .SetProperty(v => v.UpdatedAt, DateTimeOffset.UtcNow),
-            cancellationToken);
+        // Update global stats — one row, no full-table scan
+        var stats = await db.Bm25Stats.FindAsync([1], cancellationToken);
+        if (stats is null)
+        {
+            db.Bm25Stats.Add(new Bm25StatsEntity
+            {
+                Id = 1,
+                TotalDocuments = totalDocs,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+        }
+        else
+        {
+            stats.TotalDocuments = totalDocs;
+            stats.UpdatedAt = DateTimeOffset.UtcNow;
+        }
 
         var termKeys = termDfs.Keys.ToList();
         var existingMap = await db.Bm25Vocab
@@ -72,7 +90,6 @@ public sealed class BM25VocabService : IBM25VocabStore
             if (existingMap.TryGetValue(term, out var existing))
             {
                 existing.DocumentFrequency += df;
-                existing.TotalDocuments = totalDocs;
                 existing.UpdatedAt = DateTimeOffset.UtcNow;
                 toUpdate.Add(existing);
             }
@@ -82,7 +99,6 @@ public sealed class BM25VocabService : IBM25VocabStore
                 {
                     Term = term,
                     DocumentFrequency = df,
-                    TotalDocuments = totalDocs,
                     UpdatedAt = DateTimeOffset.UtcNow
                 });
             }

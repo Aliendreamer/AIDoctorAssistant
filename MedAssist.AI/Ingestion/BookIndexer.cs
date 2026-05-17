@@ -116,6 +116,7 @@ public sealed class BookIndexer
         await _checkpointRepo.UpsertAsync(new IngestionCheckpoint(
             bookId, allChunks.Count, allChunks.Count, allChunks.Count - 1, IngestionStatus.Complete, DateTimeOffset.UtcNow), cancellationToken);
 
+        await IndexSectionSummariesAsync(allChunks, bookId, title, author, language, cancellationToken);
         await _vocabBuilder.FlushAsync(cancellationToken);
 
         await _bookRepo.UpsertAsync(new BookInfo
@@ -131,5 +132,52 @@ public sealed class BookIndexer
         }, cancellationToken);
 
         _logger.LogInformation("Indexing complete for {BookId}: {Total} chunks", bookId, allChunks.Count);
+    }
+
+    private async Task IndexSectionSummariesAsync(
+        IReadOnlyList<(string HeadingPath, string Text, ContentType ContentType)> allChunks,
+        string bookId,
+        string title,
+        string author,
+        string language,
+        CancellationToken cancellationToken)
+    {
+        // Group by heading path; first chunk of each group becomes the summary source
+        var groups = allChunks
+            .Select((c, i) => (c.HeadingPath, c.Text, Index: i))
+            .GroupBy(c => c.HeadingPath)
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key));
+
+        var summaryIndex = allChunks.Count;
+        foreach (var group in groups)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var headingPath = group.Key;
+            var firstText = group.First().Text;
+            var preview = firstText.Length > 800 ? firstText[..800] : firstText;
+            var summaryText = $"{headingPath}\n\n{preview}";
+
+            var parts = headingPath.Split(" > ", 2);
+            var chunk = new MedicalChunk
+            {
+                BookId = bookId,
+                BookTitle = title,
+                Author = author,
+                Language = language,
+                ChapterTitle = parts.Length > 0 ? parts[0] : string.Empty,
+                SectionTitle = parts.Length > 1 ? parts[1] : string.Empty,
+                ChunkIndex = summaryIndex++,
+                ContentType = ContentType.Text,
+                Text = summaryText,
+                IcdCodes = [],
+                IsSummary = true
+            };
+
+            var denseVector = await _embedder.EmbedPassageAsync(summaryText, cancellationToken);
+            var sparseVector = await _sparseVectorizer.VectorizePassageAsync(summaryText, cancellationToken);
+            await _vectorStore.UpsertAsync(chunk, denseVector, sparseVector, cancellationToken);
+        }
+
+        _logger.LogInformation("Section summaries indexed for {BookId}", bookId);
     }
 }

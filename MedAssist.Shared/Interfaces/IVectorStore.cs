@@ -17,4 +17,13 @@ public interface IVectorStore
         IReadOnlyList<string>? bookIds,
         int topK = 5,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<MedicalChunk>> ScrollSectionAsync(
+        string chapterTitle,
+        string sectionTitle,
+        string bookId,
+        int limit = 50,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteCollectionAsync(CancellationToken cancellationToken = default);
 }

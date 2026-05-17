@@ -104,7 +104,8 @@ public sealed class MarkdownChunkerTests
         var md = $"# Chapter\n\n{sentences}";
         var result = _sut.Chunk(md);
         Assert.True(result.Count > 1);
-        Assert.All(result, c => Assert.True(c.Text.Length <= 2048 + 200)); // some tolerance for sentence boundaries
+        // 2048 chars = 512 tokens max; 512 chars overlap prefix; 200 chars sentence-boundary tolerance
+        Assert.All(result, c => Assert.True(c.Text.Length <= 2048 + 512 + 200));
     }
 
     [Fact]

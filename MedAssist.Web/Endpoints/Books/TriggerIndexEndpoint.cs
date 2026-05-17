@@ -1,6 +1,9 @@
 using FastEndpoints;
 using MedAssist.AI.Ingestion;
+using MedAssist.Data;
 using MedAssist.Data.Repositories;
+using MedAssist.Shared.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Web.Endpoints.Books;
 
@@ -49,6 +52,20 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
                 statusCode: 409,
                 cancellation: ct);
             return;
+        }
+
+        var force = Query<string>("force")?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+        if (force)
+        {
+            var vectorStore = HttpContext.RequestServices.GetRequiredService<IVectorStore>();
+            var checkpointRepo = HttpContext.RequestServices.GetRequiredService<CheckpointRepository>();
+            var dbFactory = HttpContext.RequestServices.GetRequiredService<IDbContextFactory<MedAssistDbContext>>();
+            await vectorStore.DeleteCollectionAsync(ct);
+            await checkpointRepo.DeleteAsync(book.BookId, ct);
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            await db.Bm25Vocab.ExecuteDeleteAsync(ct);
+            await db.Bm25Stats.ExecuteDeleteAsync(ct);
+            _logger.LogInformation("Force re-index: cleared Qdrant, checkpoint, and BM25 vocab for {BookId}", book.BookId);
         }
 
         var pdfPath = book.FilePath;

@@ -45,6 +45,17 @@ public sealed class CheckpointRepository
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteAsync(string bookId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var entity = await db.IngestionCheckpoints.FindAsync([bookId], cancellationToken);
+        if (entity is not null)
+        {
+            db.IngestionCheckpoints.Remove(entity);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+    }
+
     public async Task<IngestionCheckpoint?> GetByBookIdAsync(string bookId, CancellationToken cancellationToken = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);

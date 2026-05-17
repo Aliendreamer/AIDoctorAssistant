@@ -50,6 +50,7 @@ public abstract class RagPluginBase
         var expandedTerms = await _dictionary.ExpandQueryAsync(query, cancellationToken);
 
         var candidates = await GatherCandidatesAsync(expandedTerms, langFilter, bookIds, topK: 5, cancellationToken);
+        candidates = await ExpandBySectionAsync(candidates, cancellationToken);
 
         if (candidates.Count == 0)
         {
@@ -71,6 +72,7 @@ public abstract class RagPluginBase
             var iterTerms = SelectTerms(expandedTerms, strategy);
 
             var newChunks = await GatherCandidatesAsync(iterTerms, iterLang, bookIds, strategy.TopK, cancellationToken);
+            newChunks = await ExpandBySectionAsync(newChunks, cancellationToken);
             if (newChunks.Count == 0)
             {
                 continue;
@@ -84,7 +86,13 @@ public abstract class RagPluginBase
             scored = await _reranker.RerankAsync(query, candidates, cancellationToken);
         }
 
-        var topChunks = scored.Select(s => s.Chunk).Take(5).ToList();
+        // Exclude summary chunks from the final answer
+        var topChunks = scored
+            .Select(s => s.Chunk)
+            .Where(c => !c.IsSummary)
+            .Take(5)
+            .ToList();
+
         return BuildResult(topChunks);
     }
 
@@ -103,7 +111,40 @@ public abstract class RagPluginBase
             var results = await _vectorStore.SearchAsync(denseVector, sparseVector, langFilter, bookIds, topK, cancellationToken);
             chunks.AddRange(results);
         }
+
         return chunks;
+    }
+
+    // For each unique (chapter, section, bookId) in the candidate pool — including
+    // summary chunks which act as retrieval triggers — fetch all regular chunks from
+    // that section and merge them into the pool.
+    private async Task<List<MedicalChunk>> ExpandBySectionAsync(
+        List<MedicalChunk> candidates,
+        CancellationToken cancellationToken)
+    {
+        var sections = candidates
+            .Where(c => !string.IsNullOrEmpty(c.SectionTitle))
+            .Select(c => (c.ChapterTitle, c.SectionTitle, c.BookId))
+            .Distinct()
+            .ToList();
+
+        if (sections.Count == 0)
+        {
+            return candidates;
+        }
+
+        var expanded = new List<MedicalChunk>(candidates);
+        foreach (var (chapter, section, bookId) in sections)
+        {
+            var sectionChunks = await _vectorStore.ScrollSectionAsync(chapter, section, bookId, limit: 50, cancellationToken);
+            expanded.AddRange(sectionChunks);
+        }
+
+        // Deduplicate by BookId:ChunkIndex; summaries from search stay in pool
+        // until the final filter in ExecuteSearchAsync removes them from the answer.
+        return expanded
+            .DistinctBy(c => $"{c.BookId}:{c.ChunkIndex}")
+            .ToList();
     }
 
     private static IReadOnlyList<string> SelectTerms(IReadOnlyList<string> expandedTerms, RetryStrategy strategy)
@@ -113,6 +154,7 @@ public abstract class RagPluginBase
             var longest = expandedTerms.MaxBy(t => t.Length);
             return longest is null ? [] : [longest];
         }
+
         return expandedTerms;
     }
 

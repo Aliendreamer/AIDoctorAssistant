@@ -4,13 +4,23 @@ using MedAssist.Shared.Models;
 
 namespace MedAssist.AI.Ingestion;
 
-public sealed class MarkdownChunker
+public sealed partial class MarkdownChunker
 {
     private const int _maxTokens = 512;
     private const int _minTokens = 50;
+    private readonly int _overlapChars;
+
+    [GeneratedRegex(@"!\[[^\]]*\]\(data:[^)]+\)", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
+    private static partial Regex InlineImageRegex();
+
+    private static string StripInlineImages(string markdown) =>
+        InlineImageRegex().Replace(markdown, string.Empty);
+
+    public MarkdownChunker(int overlapChars = 512) => _overlapChars = overlapChars;
 
     public IReadOnlyList<(string HeadingPath, string Text, ContentType ContentType)> Chunk(string markdown)
     {
+        markdown = StripInlineImages(markdown);
         var lines = markdown.Split('\n');
         var chunks = new List<(string, string, ContentType)>();
         var headingStack = new Stack<string>();
@@ -50,7 +60,10 @@ public sealed class MarkdownChunker
         }
 
         FlushChunk(chunks, headingStack, currentContent, currentType);
-        return MergeSmallChunks(SplitLargeChunks(chunks));
+
+        var split = SplitLargeChunks(chunks);
+        var overlapped = ApplyOverlap(split);
+        return MergeSmallChunks(overlapped);
     }
 
     private static void FlushChunk(
@@ -98,6 +111,33 @@ public sealed class MarkdownChunker
             {
                 result.Add((path, current.ToString().Trim(), type));
             }
+        }
+
+        return result;
+    }
+
+    // Prepend the tail of the previous chunk as overlap prefix when consecutive
+    // chunks share the same heading path. Resets at heading boundaries.
+    private IReadOnlyList<(string, string, ContentType)> ApplyOverlap(
+        IReadOnlyList<(string HeadingPath, string Text, ContentType ContentType)> chunks)
+    {
+        if (_overlapChars <= 0 || chunks.Count <= 1)
+        {
+            return chunks;
+        }
+
+        var result = new List<(string, string, ContentType)>(chunks.Count);
+        for (var i = 0; i < chunks.Count; i++)
+        {
+            var (path, text, type) = chunks[i];
+            if (i > 0 && chunks[i - 1].HeadingPath == path)
+            {
+                var prev = chunks[i - 1].Text;
+                var overlap = prev.Length > _overlapChars ? prev[^_overlapChars..] : prev;
+                text = overlap + "\n" + text;
+            }
+
+            result.Add((path, text, type));
         }
 
         return result;

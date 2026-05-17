@@ -55,6 +55,7 @@ public sealed class QdrantVectorStore : IVectorStore
                 [VectorStoreConstants.Payload.ContentType] = chunk.ContentType.ToString().ToLowerInvariant(),
                 [VectorStoreConstants.Payload.Text] = chunk.Text,
                 [VectorStoreConstants.Payload.IcdCodes] = string.Join(",", chunk.IcdCodes),
+                [VectorStoreConstants.Payload.IsSummary] = chunk.IsSummary,
             }
         };
 
@@ -76,7 +77,6 @@ public sealed class QdrantVectorStore : IVectorStore
             return await HybridSearchAsync(denseQueryVector, sparseQueryVector, filter, topK, cancellationToken);
         }
 
-        // Dense-only fallback
         var results = await _client.SearchAsync(
             VectorStoreConstants.CollectionName,
             denseQueryVector,
@@ -87,6 +87,72 @@ public sealed class QdrantVectorStore : IVectorStore
             cancellationToken: cancellationToken);
 
         return results.Select(MapToChunk).ToList();
+    }
+
+    public async Task<IReadOnlyList<MedicalChunk>> ScrollSectionAsync(
+        string chapterTitle,
+        string sectionTitle,
+        string bookId,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var filter = new Filter();
+        filter.Must.Add(new Condition
+        {
+            Field = new FieldCondition
+            {
+                Key = VectorStoreConstants.Payload.BookId,
+                Match = new Match { Keyword = bookId }
+            }
+        });
+        filter.Must.Add(new Condition
+        {
+            Field = new FieldCondition
+            {
+                Key = VectorStoreConstants.Payload.ChapterTitle,
+                Match = new Match { Keyword = chapterTitle }
+            }
+        });
+        filter.Must.Add(new Condition
+        {
+            Field = new FieldCondition
+            {
+                Key = VectorStoreConstants.Payload.SectionTitle,
+                Match = new Match { Keyword = sectionTitle }
+            }
+        });
+        // Exclude summary chunks — regular chunks may not have this field (old data),
+        // but MustNot only blocks points where the condition is true.
+        filter.MustNot.Add(new Condition
+        {
+            Field = new FieldCondition
+            {
+                Key = VectorStoreConstants.Payload.IsSummary,
+                Match = new Match { Boolean = true }
+            }
+        });
+
+        var scrollResult = await _client.ScrollAsync(
+            VectorStoreConstants.CollectionName,
+            filter,
+            (uint)limit,
+            null!,
+            new WithPayloadSelector { Enable = true },
+            new WithVectorsSelector { Enable = false },
+            null!,
+            null!,
+            null!,
+            cancellationToken);
+
+        return scrollResult.Result.Select(MapRetrievedToChunk).ToList();
+    }
+
+    public async Task DeleteCollectionAsync(CancellationToken cancellationToken = default)
+    {
+        if (await _client.CollectionExistsAsync(VectorStoreConstants.CollectionName, cancellationToken))
+        {
+            await _client.DeleteCollectionAsync(VectorStoreConstants.CollectionName, cancellationToken: cancellationToken);
+        }
     }
 
     private async Task<IReadOnlyList<MedicalChunk>> HybridSearchAsync(
@@ -137,14 +203,6 @@ public sealed class QdrantVectorStore : IVectorStore
         return results.Select(MapToChunk).ToList();
     }
 
-    public async Task DeleteCollectionAsync(CancellationToken cancellationToken = default)
-    {
-        if (await _client.CollectionExistsAsync(VectorStoreConstants.CollectionName, cancellationToken))
-        {
-            await _client.DeleteCollectionAsync(VectorStoreConstants.CollectionName, cancellationToken: cancellationToken);
-        }
-    }
-
     private static Filter? BuildFilter(LanguageFilter language, IReadOnlyList<string>? bookIds)
     {
         var conditions = new List<Condition>();
@@ -193,21 +251,27 @@ public sealed class QdrantVectorStore : IVectorStore
         return filter;
     }
 
-    private static MedicalChunk MapToChunk(ScoredPoint point) => new()
+    private static MedicalChunk MapToChunk(ScoredPoint point) => MapPayload(point.Payload);
+
+    private static MedicalChunk MapRetrievedToChunk(RetrievedPoint point) => MapPayload(point.Payload);
+
+    private static MedicalChunk MapPayload(Google.Protobuf.Collections.MapField<string, Value> payload) => new()
     {
-        BookId = point.Payload[VectorStoreConstants.Payload.BookId].StringValue,
-        BookTitle = point.Payload[VectorStoreConstants.Payload.BookTitle].StringValue,
-        Author = point.Payload[VectorStoreConstants.Payload.Author].StringValue,
-        Language = point.Payload[VectorStoreConstants.Payload.Language].StringValue,
-        ChapterTitle = point.Payload[VectorStoreConstants.Payload.ChapterTitle].StringValue,
-        SectionTitle = point.Payload[VectorStoreConstants.Payload.SectionTitle].StringValue,
-        PageStart = (int)point.Payload[VectorStoreConstants.Payload.PageStart].IntegerValue,
-        PageEnd = (int)point.Payload[VectorStoreConstants.Payload.PageEnd].IntegerValue,
-        ChunkIndex = (int)point.Payload[VectorStoreConstants.Payload.ChunkIndex].IntegerValue,
-        ContentType = Enum.Parse<ContentType>(point.Payload[VectorStoreConstants.Payload.ContentType].StringValue, ignoreCase: true),
-        Text = point.Payload[VectorStoreConstants.Payload.Text].StringValue,
-        IcdCodes = point.Payload[VectorStoreConstants.Payload.IcdCodes].StringValue
-            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+        BookId = payload[VectorStoreConstants.Payload.BookId].StringValue,
+        BookTitle = payload[VectorStoreConstants.Payload.BookTitle].StringValue,
+        Author = payload[VectorStoreConstants.Payload.Author].StringValue,
+        Language = payload[VectorStoreConstants.Payload.Language].StringValue,
+        ChapterTitle = payload[VectorStoreConstants.Payload.ChapterTitle].StringValue,
+        SectionTitle = payload[VectorStoreConstants.Payload.SectionTitle].StringValue,
+        PageStart = (int)payload[VectorStoreConstants.Payload.PageStart].IntegerValue,
+        PageEnd = (int)payload[VectorStoreConstants.Payload.PageEnd].IntegerValue,
+        ChunkIndex = (int)payload[VectorStoreConstants.Payload.ChunkIndex].IntegerValue,
+        ContentType = Enum.Parse<ContentType>(payload[VectorStoreConstants.Payload.ContentType].StringValue, ignoreCase: true),
+        Text = payload[VectorStoreConstants.Payload.Text].StringValue,
+        IcdCodes = payload[VectorStoreConstants.Payload.IcdCodes].StringValue
+            .Split(',', StringSplitOptions.RemoveEmptyEntries),
+        IsSummary = payload.TryGetValue(VectorStoreConstants.Payload.IsSummary, out var isSummaryVal)
+            && isSummaryVal.BoolValue,
     };
 
     private async Task EnsureCollectionExistsAsync(CancellationToken cancellationToken)

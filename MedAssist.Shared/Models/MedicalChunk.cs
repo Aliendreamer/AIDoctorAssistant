@@ -14,6 +14,7 @@ public sealed class MedicalChunk
     public ContentType ContentType { get; init; }
     public string Text { get; init; } = string.Empty;
     public IReadOnlyList<string> IcdCodes { get; init; } = [];
+    public bool IsSummary { get; init; }
 }
 
 public enum ContentType

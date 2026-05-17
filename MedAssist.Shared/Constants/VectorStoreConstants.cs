@@ -24,5 +24,6 @@ public static class VectorStoreConstants
         public const string ContentType = "content_type";
         public const string Text = "text";
         public const string IcdCodes = "icd_codes";
+        public const string IsSummary = "is_summary";
     }
 }

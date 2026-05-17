@@ -14,7 +14,6 @@ public sealed class Bm25VocabEntityConfiguration : IEntityTypeConfiguration<Bm25
         builder.Property(e => e.Term).HasColumnName("term").IsRequired();
         builder.HasIndex(e => e.Term).IsUnique();
         builder.Property(e => e.DocumentFrequency).HasColumnName("document_frequency").HasDefaultValue(0);
-        builder.Property(e => e.TotalDocuments).HasColumnName("total_documents").HasDefaultValue(0);
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
     }
 }

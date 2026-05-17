@@ -173,6 +173,12 @@ public sealed class RagIterativeLoopTests
 
         public Task UpsertAsync(MedicalChunk chunk, float[] denseVector, SparseVector sparseVector, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+
+        public Task<IReadOnlyList<MedicalChunk>> ScrollSectionAsync(string chapterTitle, string sectionTitle, string bookId, int limit = 50, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<MedicalChunk>>([]);
+
+        public Task DeleteCollectionAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 
     private sealed class StubEmbedder : IEmbedder

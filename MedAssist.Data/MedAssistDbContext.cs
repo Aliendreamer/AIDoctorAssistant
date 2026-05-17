@@ -11,6 +11,7 @@ public sealed class MedAssistDbContext : DbContext
     public DbSet<IllnessEntity> Illnesses => Set<IllnessEntity>();
     public DbSet<IllnessAliasEntity> IllnessAliases => Set<IllnessAliasEntity>();
     public DbSet<Bm25VocabEntity> Bm25Vocab => Set<Bm25VocabEntity>();
+    public DbSet<Bm25StatsEntity> Bm25Stats => Set<Bm25StatsEntity>();
     public DbSet<IngestionCheckpointEntity> IngestionCheckpoints => Set<IngestionCheckpointEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

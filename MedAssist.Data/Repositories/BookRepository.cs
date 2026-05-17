@@ -20,7 +20,10 @@ public sealed class BookRepository
             existing.Author = book.Author;
             existing.Language = book.Language;
             existing.Edition = book.Edition;
-            existing.FilePath = book.FilePath;
+            if (!string.IsNullOrEmpty(book.FilePath))
+            {
+                existing.FilePath = book.FilePath;
+            }
             existing.TotalChunks = book.TotalChunks;
             existing.Status = book.Status.ToString().ToLowerInvariant();
             existing.IndexedAt = book.IndexedAt;
