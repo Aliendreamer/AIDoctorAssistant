@@ -20,7 +20,8 @@
       "data": {
         "baseUrl": "http://localhost:8080",
         "token": "",
-        "userId": ""
+        "userId": "",
+        "bookId": "1"
       }
     },
     {
@@ -157,7 +158,7 @@
       "method": "POST",
       "url": "{{ _.baseUrl }}/api/admin/index",
       "parameters": [
-        { "name": "id", "value": "1" }
+        { "name": "id", "value": "{{ _.bookId }}" }
       ],
       "headers": [
         { "name": "Authorization", "value": "Bearer {{ _.token }}" }
@@ -173,7 +174,7 @@
       "method": "POST",
       "url": "{{ _.baseUrl }}/api/admin/index",
       "parameters": [
-        { "name": "id", "value": "1" },
+        { "name": "id", "value": "{{ _.bookId }}" },
         { "name": "force", "value": "true" }
       ],
       "headers": [

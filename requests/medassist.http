@@ -5,6 +5,7 @@
 @baseUrl = http://localhost:8080
 @token = <paste_token_here>
 @userId = <paste_user_uuid_here>
+@bookId = 1
 
 # ─────────────────────────────────────────
 # AUTH
@@ -68,11 +69,12 @@ Content-Type: application/pdf
 ------Boundary--
 
 ### Trigger indexing — Docling OCR + RAG pipeline runs in background
-POST {{baseUrl}}/api/admin/index?id=1
+POST {{baseUrl}}/api/admin/index?id={{bookId}}
 Authorization: Bearer {{token}}
 
 ### Trigger indexing (force re-index — clears existing vectors first)
-POST {{baseUrl}}/api/admin/index?id=1&force=true
+POST {{baseUrl}}/api/admin/index?id={{bookId}}&force=true
+
 Authorization: Bearer {{token}}
 
 # ─────────────────────────────────────────
