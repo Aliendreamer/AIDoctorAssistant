@@ -12,12 +12,15 @@ using MedAssist.Data.Repositories;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 using MedAssist.Web.Data;
+using MedAssist.Web.Options;
 using MedAssist.Web.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -33,7 +36,7 @@ internal static class ServiceCollectionExtensions
         services.AddDbContext<MedAssistDbContext>(opt =>
             opt.UseNpgsql(configuration.GetConnectionString("Postgres"),
                 o => o.SetPostgresVersion(17, 0).MapEnum<BookStatus>("book_status"))
-               .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+               .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
         services.AddScoped<BookCatalogService>();
         services.AddScoped<IMedicalDictionary, MedicalDictionaryService>();
@@ -47,31 +50,40 @@ internal static class ServiceCollectionExtensions
 
     internal static IServiceCollection AddAiServices(this IServiceCollection services, IConfiguration configuration)
     {
-        var modelsPath = configuration["Models:Path"] ?? "models";
-        var modelDir = Path.Combine(modelsPath, "multilingual-e5-large");
+        services.Configure<ModelsOptions>(configuration.GetSection("Models"));
+        services.Configure<QdrantOptions>(configuration.GetSection("VectorStore:Qdrant"));
+        services.Configure<DoclingOptions>(configuration.GetSection("Docling"));
 
-        services.AddHttpClient<ModelInitializer>(client =>
+        services.AddHttpClient<ModelInitializer>((sp, client) =>
         {
-            client.Timeout = TimeSpan.FromMinutes(15);
+            var opts = sp.GetRequiredService<IOptions<ModelsOptions>>().Value;
+            client.Timeout = TimeSpan.FromMinutes(opts.InitializerTimeoutMinutes);
         });
-        services.AddScoped<IEmbedder>(_ => new MultilingualE5Embedder(modelDir));
 
-        var qdrantEndpoint = configuration["VectorStore:Qdrant:Endpoint"] ?? "http://localhost:6333";
-        var qdrantUri = new Uri(qdrantEndpoint);
-        services.AddScoped(_ => new QdrantClient(qdrantUri.Host, qdrantUri.Port));
-        services.AddScoped<IVectorStore, QdrantVectorStore>();
+        services.AddSingleton<IEmbedder>(sp =>
+        {
+            var opts = sp.GetRequiredService<IOptions<ModelsOptions>>().Value;
+            var modelDir = Path.Combine(opts.Path, "multilingual-e5-large");
+            return new MultilingualE5Embedder(modelDir);
+        });
+
+        services.AddSingleton(sp =>
+        {
+            var opts = sp.GetRequiredService<IOptions<QdrantOptions>>().Value;
+            var uri = new Uri(opts.Endpoint);
+            return new QdrantClient(uri.Host, uri.Port);
+        });
+        services.AddSingleton<IVectorStore, QdrantVectorStore>();
 
         services.AddScoped<ISparseVectorizer, SparseVectorizer>();
 
-        var rerankerPath = configuration["Models:RerankerPath"] ?? "models/ms-marco-MiniLM-L-6-v2";
-        services.AddScoped<ICrossEncoderReranker>(_ => new CrossEncoderReranker(rerankerPath));
-
-        var ragOptions = new RagOptions
+        services.AddSingleton<ICrossEncoderReranker>(sp =>
         {
-            ConfidenceThreshold = configuration.GetValue<float>("Rag:ConfidenceThreshold", 0.0f),
-            MaxIterations = Math.Min(configuration.GetValue<int>("Rag:MaxIterations", 2), 5)
-        };
+            var opts = sp.GetRequiredService<IOptions<ModelsOptions>>().Value;
+            return new CrossEncoderReranker(opts.RerankerPath);
+        });
 
+        services.Configure<RagOptions>(configuration.GetSection("Rag"));
         services.AddScoped(sp => AI.Kernel.KernelFactory.Build(
             configuration,
             sp.GetRequiredService<IMedicalDictionary>(),
@@ -79,14 +91,13 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<IEmbedder>(),
             sp.GetRequiredService<ISparseVectorizer>(),
             sp.GetRequiredService<ICrossEncoderReranker>(),
-            ragOptions));
+            sp.GetRequiredService<IOptions<RagOptions>>().Value));
 
-        // Indexing pipeline
-        var doclingEndpoint = configuration["Docling:Endpoint"] ?? "http://docling:5001";
-        services.AddHttpClient<DoclingClient>(client =>
+        services.AddHttpClient<DoclingClient>((sp, client) =>
         {
-            client.BaseAddress = new Uri(doclingEndpoint);
-            client.Timeout = TimeSpan.FromMinutes(30);
+            var opts = sp.GetRequiredService<IOptions<DoclingOptions>>().Value;
+            client.BaseAddress = new Uri(opts.Endpoint);
+            client.Timeout = TimeSpan.FromMinutes(opts.TimeoutMinutes);
         });
         services.AddTransient<MarkdownChunker>();
         services.AddTransient<ChunkEnricher>();
@@ -118,7 +129,7 @@ internal static class ServiceCollectionExtensions
 
         services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
         {
-            options.MultipartBodyLengthLimit = 764 * 1024 * 1024; // 764 MB
+            options.MultipartBodyLengthLimit = 764 * 1024 * 1024;
             options.ValueLengthLimit = int.MaxValue;
         });
 
@@ -149,13 +160,8 @@ internal static class ServiceCollectionExtensions
 
     internal static IServiceCollection AddAuth(this IServiceCollection services, IConfiguration configuration)
     {
-        var secretKey = configuration["Auth:Jwt:SecretKey"]
-            ?? throw new InvalidOperationException("Auth:Jwt:SecretKey is not configured");
-        var issuer = configuration["Auth:Jwt:Issuer"] ?? "medassist";
-        var audience = configuration["Auth:Jwt:Audience"] ?? "medassist-api";
-        var expiryMinutes = configuration.GetValue<int>("Auth:Jwt:ExpiryMinutes", 480);
+        services.Configure<JwtOptions>(configuration.GetSection("Auth:Jwt"));
 
-        // Policy scheme: API paths use JWT bearer; all other paths (Blazor) use cookies.
         services.AddAuthentication(options =>
         {
             options.DefaultScheme = "Smart";
@@ -171,21 +177,35 @@ internal static class ServiceCollectionExtensions
         .AddCookie(options =>
         {
             options.LoginPath = "/login";
-            options.ExpireTimeSpan = TimeSpan.FromMinutes(expiryMinutes);
             options.SlidingExpiration = true;
         })
-        .AddJwtBearer(options =>
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
+        .AddJwtBearer();
+
+        services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
+            .Configure<IOptions<JwtOptions>>((cookie, jwt) =>
             {
-                ValidIssuer = issuer,
-                ValidAudience = audience,
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
-            };
-        });
+                cookie.ExpireTimeSpan = TimeSpan.FromMinutes(jwt.Value.ExpiryMinutes);
+            });
+
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<IOptions<JwtOptions>>((bearer, jwt) =>
+            {
+                var opts = jwt.Value;
+                if (string.IsNullOrEmpty(opts.SecretKey))
+                {
+                    throw new InvalidOperationException("Auth:Jwt:SecretKey is not configured");
+                }
+
+                bearer.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidIssuer = opts.Issuer,
+                    ValidAudience = opts.Audience,
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(opts.SecretKey))
+                };
+            });
 
         services.AddAuthorization();
         return services;
@@ -208,14 +228,17 @@ internal static class ServiceCollectionExtensions
 
     internal static IServiceCollection AddObservability(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
+        services.Configure<OtelOptions>(configuration.GetSection("OpenTelemetry"));
+
         services.AddHealthChecks();
 
-        var serviceName = configuration["OpenTelemetry:ServiceName"] ?? "medassist-web";
-        var otlpEndpoint = configuration["OpenTelemetry:Endpoint"] ?? "http://localhost:4317";
+        var otelOpts = configuration.GetSection("OpenTelemetry").Get<OtelOptions>() ?? new OtelOptions();
 
         var resource = ResourceBuilder.CreateDefault().AddService(
-            serviceName: serviceName,
+            serviceName: otelOpts.ServiceName,
             serviceVersion: typeof(ServiceCollectionExtensions).Assembly.GetName().Version?.ToString() ?? "0.0.0");
+
+        var otlpEndpoint = new Uri(otelOpts.Endpoint);
 
         services.AddOpenTelemetry()
             .WithMetrics(metrics => metrics
@@ -224,7 +247,7 @@ internal static class ServiceCollectionExtensions
                 .AddRuntimeInstrumentation()
                 .AddMeter("MedAssist.Web")
                 .AddPrometheusExporter()
-                .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)))
+                .AddOtlpExporter(o => o.Endpoint = otlpEndpoint))
             .WithTracing(tracing =>
             {
                 tracing
@@ -237,7 +260,7 @@ internal static class ServiceCollectionExtensions
                             !ctx.Request.Path.StartsWithSegments("/health");
                     })
                     .AddHttpClientInstrumentation()
-                    .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+                    .AddOtlpExporter(o => o.Endpoint = otlpEndpoint);
             });
 
         return services;
