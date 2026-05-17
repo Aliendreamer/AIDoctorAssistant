@@ -43,7 +43,10 @@
             {
                 <label class="book-item">
                     <input type="checkbox" value="@book.BookId" @onchange="e => ToggleBook(book.BookId, (bool)(e.Value ?? false))" />
-                    @book.Title — @book.Author (@book.Language.ToUpperInvariant())
+                    <span class="book-item-info">
+                        <span class="book-item-title">@book.Title</span>
+                        <span class="book-item-meta">@book.Author • @book.Language.ToUpperInvariant()</span>
+                    </span>
                 </label>
             }
             @if (_books.Count == 0)
