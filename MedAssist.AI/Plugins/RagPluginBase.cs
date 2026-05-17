@@ -123,7 +123,7 @@ public abstract class RagPluginBase
         CancellationToken cancellationToken)
     {
         var sections = candidates
-            .Where(c => !string.IsNullOrEmpty(c.SectionTitle))
+            .Where(c => c.IsSummary && !string.IsNullOrEmpty(c.SectionTitle))
             .Select(c => (c.ChapterTitle, c.SectionTitle, c.BookId))
             .Distinct()
             .ToList();
