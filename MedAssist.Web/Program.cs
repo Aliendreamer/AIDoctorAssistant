@@ -9,9 +9,6 @@ using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
 
-int cpuCount = Environment.ProcessorCount;
-ThreadPool.SetMinThreads(workerThreads: 4 * cpuCount, completionPortThreads: 4 * cpuCount);
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.ConfigureKestrel(options =>
