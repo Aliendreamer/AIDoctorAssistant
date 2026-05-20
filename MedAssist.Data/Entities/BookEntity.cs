@@ -14,4 +14,5 @@ public sealed class BookEntity
     public int TotalChunks { get; set; }
     public BookStatus Status { get; set; } = BookStatus.Pending;
     public DateTimeOffset? IndexedAt { get; set; }
+    public string? Outline { get; set; }
 }

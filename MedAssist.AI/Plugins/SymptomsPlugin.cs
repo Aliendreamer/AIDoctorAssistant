@@ -7,13 +7,14 @@ namespace MedAssist.AI.Plugins;
 public sealed class SymptomsPlugin : RagPluginBase
 {
     public SymptomsPlugin(
+        Microsoft.SemanticKernel.Kernel kernel,
         IMedicalDictionary dictionary,
         IVectorStore vectorStore,
         IEmbedder embedder,
         ISparseVectorizer sparseVectorizer,
         ICrossEncoderReranker reranker,
         RagOptions options)
-        : base(dictionary, vectorStore, embedder, sparseVectorizer, reranker, options)
+        : base(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options)
     {
     }
 
@@ -22,6 +23,7 @@ public sealed class SymptomsPlugin : RagPluginBase
         [System.ComponentModel.Description("The symptoms to look up")] string query,
         [System.ComponentModel.Description("Language filter: both, en, bg")] string language = "both",
         [System.ComponentModel.Description("Specific book IDs to search (null = all books)")] string[]? bookIds = null,
+        BookInfo[]? books = null,
         CancellationToken cancellationToken = default)
-        => base.ExecuteSearchAsync(query, language, bookIds, cancellationToken);
+        => base.ExecuteSearchAsync(query, language, bookIds, books, cancellationToken);
 }

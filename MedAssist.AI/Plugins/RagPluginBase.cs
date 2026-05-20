@@ -1,11 +1,15 @@
+using System.Text;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
+using Microsoft.SemanticKernel.ChatCompletion;
+using SKKernel = Microsoft.SemanticKernel.Kernel;
 
 namespace MedAssist.AI.Plugins;
 
 public abstract class RagPluginBase
 {
+    private readonly SKKernel _kernel;
     private readonly IMedicalDictionary _dictionary;
     private readonly IVectorStore _vectorStore;
     private readonly IEmbedder _embedder;
@@ -25,6 +29,7 @@ public abstract class RagPluginBase
     ];
 
     protected RagPluginBase(
+        SKKernel kernel,
         IMedicalDictionary dictionary,
         IVectorStore vectorStore,
         IEmbedder embedder,
@@ -32,6 +37,7 @@ public abstract class RagPluginBase
         ICrossEncoderReranker reranker,
         RagOptions options)
     {
+        _kernel = kernel;
         _dictionary = dictionary;
         _vectorStore = vectorStore;
         _embedder = embedder;
@@ -44,6 +50,7 @@ public abstract class RagPluginBase
         string query,
         string language,
         string[]? bookIds,
+        IReadOnlyList<BookInfo>? books = null,
         CancellationToken cancellationToken = default)
     {
         var langFilter = ParseLanguage(language);
@@ -93,7 +100,7 @@ public abstract class RagPluginBase
             .Take(5)
             .ToList();
 
-        return BuildResult(topChunks);
+        return await BuildResultAsync(query, topChunks, books, cancellationToken);
     }
 
     private async Task<List<MedicalChunk>> GatherCandidatesAsync(
@@ -158,15 +165,16 @@ public abstract class RagPluginBase
         return expandedTerms;
     }
 
-    private static QueryResult BuildResult(IReadOnlyList<MedicalChunk> chunks)
+    private async Task<QueryResult> BuildResultAsync(
+        string query,
+        IReadOnlyList<MedicalChunk> chunks,
+        IReadOnlyList<BookInfo>? books,
+        CancellationToken cancellationToken)
     {
         if (chunks.Count == 0)
         {
             return new QueryResult { Answer = "No relevant information found in the indexed books." };
         }
-
-        var answer = string.Join("\n\n---\n\n", chunks.Select(c =>
-            $"**{c.ChapterTitle} > {c.SectionTitle}**\n{c.Text}"));
 
         var sources = chunks.Select(c => new SourceCitation
         {
@@ -178,6 +186,43 @@ public abstract class RagPluginBase
             PageStart = c.PageStart,
             PageEnd = c.PageEnd
         }).ToList();
+
+        var systemPrompt = new StringBuilder();
+        systemPrompt.AppendLine(
+            "You are MedAssist, a clinical decision support assistant for physicians. " +
+            "Answer using only the provided excerpts. Be direct and clinical. " +
+            "Use markdown (headings, bullets, bold terms) where it aids clarity. " +
+            "Cite the book title and section when referencing specific content. " +
+            "If the excerpts are insufficient, say so explicitly — do not speculate.");
+
+        if (books is { Count: > 0 })
+        {
+            systemPrompt.AppendLine();
+            systemPrompt.AppendLine("Sources searched:");
+            foreach (var b in books)
+            {
+                var entry = string.IsNullOrEmpty(b.Author)
+                    ? $"- {b.Title}"
+                    : $"- {b.Title} by {b.Author}";
+                systemPrompt.AppendLine(entry);
+            }
+        }
+
+        var context = new StringBuilder();
+        foreach (var c in chunks)
+        {
+            context.AppendLine($"[{c.BookTitle} — {c.ChapterTitle} › {c.SectionTitle}]");
+            context.AppendLine(c.Text);
+            context.AppendLine();
+        }
+
+        var history = new ChatHistory();
+        history.AddSystemMessage(systemPrompt.ToString());
+        history.AddUserMessage($"Question: {query}\n\nMedical excerpts:\n\n{context}");
+
+        var chat = _kernel.GetRequiredService<IChatCompletionService>();
+        var response = await chat.GetChatMessageContentAsync(history, cancellationToken: cancellationToken);
+        var answer = response.Content ?? "Unable to generate a response.";
 
         return new QueryResult { Answer = answer, Sources = sources };
     }

@@ -54,6 +54,18 @@ public sealed class BookRepository(MedAssistDbContext db)
         return entity is null ? null : MapToInfo(entity);
     }
 
+    public async Task UpdateOutlineAsync(string bookId, string outline, CancellationToken cancellationToken = default)
+    {
+        var entity = await db.Books.FirstOrDefaultAsync(b => b.BookId == bookId, cancellationToken);
+        if (entity is null)
+        {
+            return;
+        }
+
+        entity.Outline = outline;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     private static BookInfo MapToInfo(BookEntity b) => new()
     {
         Id = b.Id,
@@ -65,6 +77,7 @@ public sealed class BookRepository(MedAssistDbContext db)
         FilePath = b.FilePath,
         TotalChunks = b.TotalChunks,
         Status = b.Status,
-        IndexedAt = b.IndexedAt
+        IndexedAt = b.IndexedAt,
+        Outline = b.Outline
     };
 }

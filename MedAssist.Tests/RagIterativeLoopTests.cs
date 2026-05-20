@@ -1,6 +1,9 @@
 using MedAssist.AI.Plugins;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
 
 namespace MedAssist.Tests;
 
@@ -9,12 +12,20 @@ public sealed class RagIterativeLoopTests
     // Default options: threshold 0.0, 2 iterations
     private static RagOptions DefaultOptions => new() { ConfidenceThreshold = 0.0f, MaxIterations = 2 };
 
+    private static Microsoft.SemanticKernel.Kernel BuildTestKernel()
+    {
+        var builder = Microsoft.SemanticKernel.Kernel.CreateBuilder();
+        builder.Services.AddSingleton<IChatCompletionService>(new StubChatCompletionService());
+        return builder.Build();
+    }
+
     private static SymptomsPlugin MakePlugin(
         IVectorStore vectorStore,
         ICrossEncoderReranker reranker,
         RagOptions? options = null)
     {
         return new SymptomsPlugin(
+            BuildTestKernel(),
             new StubDictionary(),
             vectorStore,
             new StubEmbedder(),
@@ -213,5 +224,29 @@ public sealed class RagIterativeLoopTests
                 .ToList();
             return Task.FromResult(result);
         }
+    }
+
+    // Returns the user message verbatim so answer-content assertions remain valid.
+    private sealed class StubChatCompletionService : IChatCompletionService
+    {
+        public IReadOnlyDictionary<string, object?> Attributes => new Dictionary<string, object?>();
+
+        public Task<IReadOnlyList<ChatMessageContent>> GetChatMessageContentsAsync(
+            ChatHistory chatHistory,
+            PromptExecutionSettings? executionSettings = null,
+            Microsoft.SemanticKernel.Kernel? kernel = null,
+            CancellationToken cancellationToken = default)
+        {
+            var userMsg = chatHistory.LastOrDefault(m => m.Role == AuthorRole.User)?.Content ?? string.Empty;
+            IReadOnlyList<ChatMessageContent> result = [new ChatMessageContent(AuthorRole.Assistant, userMsg)];
+            return Task.FromResult(result);
+        }
+
+        public IAsyncEnumerable<StreamingChatMessageContent> GetStreamingChatMessageContentsAsync(
+            ChatHistory chatHistory,
+            PromptExecutionSettings? executionSettings = null,
+            Microsoft.SemanticKernel.Kernel? kernel = null,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }

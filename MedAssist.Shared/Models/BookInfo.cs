@@ -12,6 +12,7 @@ public sealed class BookInfo
     public int TotalChunks { get; init; }
     public BookStatus Status { get; init; }
     public DateTimeOffset? IndexedAt { get; init; }
+    public string? Outline { get; init; }
 }
 
 public enum BookStatus

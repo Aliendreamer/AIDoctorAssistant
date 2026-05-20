@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using MedAssist.Data.Repositories;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
@@ -113,6 +114,9 @@ public sealed class BookIndexer
         await IndexSectionSummariesAsync(allChunks, bookId, title, author, language, cancellationToken);
         await _vocabBuilder.FlushAsync(cancellationToken);
 
+        var outline = ExtractOutline(markdownText);
+        await _bookRepo.UpdateOutlineAsync(bookId, outline, cancellationToken);
+
         await _bookRepo.UpsertAsync(new BookInfo
         {
             BookId = bookId,
@@ -126,6 +130,38 @@ public sealed class BookIndexer
         }, cancellationToken);
 
         _logger.LogInformation("Indexing complete for {BookId}: {Total} chunks", bookId, allChunks.Count);
+    }
+
+    private static readonly Regex _headingRegex = new(@"^## (.+)$", RegexOptions.Multiline | RegexOptions.Compiled);
+
+    private static string ExtractOutline(string markdown)
+    {
+        var headings = new List<string>();
+        foreach (Match m in _headingRegex.Matches(markdown))
+        {
+            var text = m.Groups[1].Value.Trim();
+            if (text.Length < 5)
+            {
+                continue;
+            }
+
+            if (text.EndsWith(':') || text.EndsWith('.'))
+            {
+                continue;
+            }
+
+            if (text.Contains('=') || text.Contains('+'))
+            {
+                continue;
+            }
+
+            headings.Add(text);
+            if (headings.Count >= 100)
+            {
+                break;
+            }
+        }
+        return string.Join('\n', headings);
     }
 
     private async Task IndexSectionSummariesAsync(

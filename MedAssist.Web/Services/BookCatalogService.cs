@@ -24,7 +24,8 @@ public sealed class BookCatalogService(MedAssistDbContext db)
             FilePath = b.FilePath,
             TotalChunks = b.TotalChunks,
             Status = b.Status,
-            IndexedAt = b.IndexedAt
+            IndexedAt = b.IndexedAt,
+            Outline = b.Outline
         }).ToList();
     }
 }

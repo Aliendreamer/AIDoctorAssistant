@@ -13,14 +13,40 @@ public sealed partial class MarkdownChunker
     [GeneratedRegex(@"!\[[^\]]*\]\(data:[^)]+\)", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
     private static partial Regex InlineImageRegex();
 
+    // U+00AD soft hyphen optionally followed by whitespace — Docling PDF artifact
+    [GeneratedRegex(@"­[ \t]*", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
+    private static partial Regex SoftHyphenRegex();
+
+    // "word - word" mid-line hyphen with spaces — OCR line-break artifact
+    [GeneratedRegex(@"([А-Яа-яЁёA-Za-z0-9]) - ([А-Яа-яёa-z])", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
+    private static partial Regex SpaceHyphenSpaceRegex();
+
+    // "word- word" trailing hyphen + space — hyphenated word broken across PDF lines
+    [GeneratedRegex(@"([А-Яа-яЁёA-Za-z0-9])- ([А-Яа-яёa-z])", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
+    private static partial Regex HyphenSpaceRegex();
+
+    // Two or more non-newline whitespace chars — PDF justification spacing
+    [GeneratedRegex(@"[^\S\n]{2,}", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
+    private static partial Regex MultipleSpacesRegex();
+
     private static string StripInlineImages(string markdown) =>
         InlineImageRegex().Replace(markdown, string.Empty);
+
+    private static string NormalizeOcrArtifacts(string markdown)
+    {
+        markdown = SoftHyphenRegex().Replace(markdown, string.Empty);
+        markdown = SpaceHyphenSpaceRegex().Replace(markdown, "$1$2");
+        markdown = HyphenSpaceRegex().Replace(markdown, "$1$2");
+        markdown = MultipleSpacesRegex().Replace(markdown, " ");
+        return markdown;
+    }
 
     public MarkdownChunker(int overlapChars = 512) => _overlapChars = overlapChars;
 
     public IReadOnlyList<(string HeadingPath, string Text, ContentType ContentType)> Chunk(string markdown)
     {
         markdown = StripInlineImages(markdown);
+        markdown = NormalizeOcrArtifacts(markdown);
         var lines = markdown.Split('\n');
         var chunks = new List<(string, string, ContentType)>();
         var headingStack = new Stack<string>();

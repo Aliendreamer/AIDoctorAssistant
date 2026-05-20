@@ -44,9 +44,9 @@ public static class KernelFactory
 
         var kernel = builder.Build();
 
-        kernel.Plugins.AddFromObject(new SymptomsPlugin(dictionary, vectorStore, embedder, sparseVectorizer, reranker, options), PluginName<SymptomsPlugin>());
-        kernel.Plugins.AddFromObject(new DiseasePlugin(dictionary, vectorStore, embedder, sparseVectorizer, reranker, options), PluginName<DiseasePlugin>());
-        kernel.Plugins.AddFromObject(new TreatmentPlugin(dictionary, vectorStore, embedder, sparseVectorizer, reranker, options), PluginName<TreatmentPlugin>());
+        kernel.Plugins.AddFromObject(new SymptomsPlugin(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options), PluginName<SymptomsPlugin>());
+        kernel.Plugins.AddFromObject(new DiseasePlugin(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options), PluginName<DiseasePlugin>());
+        kernel.Plugins.AddFromObject(new TreatmentPlugin(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options), PluginName<TreatmentPlugin>());
 
         return kernel;
     }
