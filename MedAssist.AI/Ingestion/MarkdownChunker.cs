@@ -29,6 +29,11 @@ public sealed partial class MarkdownChunker
     [GeneratedRegex(@"[^\S\n]{2,}", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
     private static partial Regex MultipleSpacesRegex();
 
+    // Portuguese diacritics (ç ã ő ñ õ) embedded inside Cyrillic words — PDF font-encoding artifact
+    // Removes the diacritic characters when they appear between Cyrillic characters
+    [GeneratedRegex(@"(?<=[Ѐ-ӿ])[çãőñõÇÃŐÑÕ]+(?=[Ѐ-ӿ])", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
+    private static partial Regex CyrillicPortugueseArtifactRegex();
+
     private static string StripInlineImages(string markdown) =>
         InlineImageRegex().Replace(markdown, string.Empty);
 
@@ -38,6 +43,7 @@ public sealed partial class MarkdownChunker
         markdown = SpaceHyphenSpaceRegex().Replace(markdown, "$1$2");
         markdown = HyphenSpaceRegex().Replace(markdown, "$1$2");
         markdown = MultipleSpacesRegex().Replace(markdown, " ");
+        markdown = CyrillicPortugueseArtifactRegex().Replace(markdown, string.Empty);
         return markdown;
     }
 

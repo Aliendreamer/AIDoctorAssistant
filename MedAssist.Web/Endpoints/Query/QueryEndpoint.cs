@@ -21,7 +21,8 @@ public sealed class QueryEndpoint : Endpoint<QueryRequest, QueryResult>
 
     public override async Task HandleAsync(QueryRequest req, CancellationToken ct)
     {
-        var result = await _queryService.ExecuteAsync(req, ct);
+        var userId = User.Identity?.Name;
+        var result = await _queryService.ExecuteAsync(req, userId, ct);
         await Send.OkAsync(result, ct);
     }
 }

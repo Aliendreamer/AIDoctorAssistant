@@ -6,6 +6,11 @@ public sealed class RagOptions
     // ms-marco models output positive logits for relevant pairs; 0.0 is the decision boundary.
     public float ConfidenceThreshold { get; init; } = 0.0f;
 
+    // Minimum score the top-ranked chunk must reach before we generate an answer.
+    // If nothing exceeds this after all retries, we return "insufficient information" instead
+    // of synthesising from low-relevance content. Tune alongside ConfidenceThreshold.
+    public float MinAnswerScore { get; init; } = 1.5f;
+
     // Refinement passes after the initial search. Each pass widens the search space.
     // Actual iterations = Min(MaxIterations, 5).
     public int MaxIterations { get; init; } = 2;

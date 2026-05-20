@@ -1,10 +1,16 @@
 @page "/query"
+@using MedAssist.Data.Repositories
 @using MedAssist.Shared.Models
 @using MedAssist.Web.Services
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using SourceType = MedAssist.Shared.Models.SourceType
 @attribute [Authorize(Roles = "Doctor,Admin")]
 @inject QueryService QueryService
 @inject BookCatalogService BookCatalogService
+@inject ChatHistoryRepository ChatHistoryRepo
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthStateProvider
 @rendermode InteractiveServer
 
 <PageTitle>MedAssist — Query</PageTitle>
@@ -13,8 +19,14 @@
 
 <div class="query-form">
     <div class="form-group">
-        <label for="queryType">Query Type</label>
-        <select id="queryType" @bind="_queryType" class="form-select">
+        <div class="d-flex align-items-center gap-2">
+            <label for="queryType">Query Type</label>
+            @if (_history.Count > 0)
+            {
+                <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="ClearHistoryAsync">Clear history</button>
+            }
+        </div>
+        <select id="queryType" @bind="_queryType" @bind:after="OnQueryTypeChangedAsync" class="form-select">
             <option value="@QueryType.Disease">Disease Info</option>
             <option value="@QueryType.Symptoms">Symptoms</option>
             <option value="@QueryType.Treatment">Treatment</option>
@@ -85,25 +97,39 @@
     <div class="alert alert-danger mt-3">@_error</div>
 }
 
-@if (_result is not null)
+@if (_history.Count > 0)
 {
-    <div class="results mt-4">
-        <h2>Results</h2>
-        <div class="answer-text">@((MarkupString)_result.Answer.Replace("\n", "<br/>"))</div>
-
-        @if (_result.Sources.Any())
+    <div class="conversation-thread mt-4">
+        @foreach (var (msg, idx) in _history.Select((m, i) => (m, i)))
         {
-            <h3 class="mt-3">Sources</h3>
-
-            @foreach (var source in _result.Sources.Where(s => s.SourceType == SourceType.Book))
-            {
-                <BookSourceCitation Citation="source" />
-            }
-
-            @foreach (var source in _result.Sources.Where(s => s.SourceType == SourceType.Web))
-            {
-                <WebSourceCitation Citation="source" />
-            }
+            <div class="chat-message @(msg.Role == "user" ? "chat-message-user" : "chat-message-assistant")">
+                <span class="chat-role">@(msg.Role == "user" ? "You" : "MedAssist")</span>
+                <div class="chat-content">@msg.Content</div>
+                @if (msg.Role == "assistant" && idx == _history.Count - 1 && _lastSources.Count > 0)
+                {
+                    <details class="chat-sources mt-1">
+                        <summary class="text-muted small">Sources (@_lastSources.Count)</summary>
+                        <ul class="list-unstyled mb-0 small">
+                            @foreach (var src in _lastSources)
+                            {
+                                <li>
+                                    @if (src.SourceType == SourceType.Book)
+                                    {
+                                        <span>@src.BookTitle</span>
+                                        @if (!string.IsNullOrEmpty(src.ChapterTitle)) { <span> › @src.ChapterTitle</span> }
+                                        @if (!string.IsNullOrEmpty(src.SectionTitle)) { <span> › @src.SectionTitle</span> }
+                                        @if (src.PageStart.HasValue) { <span class="text-muted"> (p. @src.PageStart@(src.PageEnd.HasValue && src.PageEnd != src.PageStart ? $"–{src.PageEnd}" : ""))</span> }
+                                    }
+                                    else if (!string.IsNullOrEmpty(src.Url))
+                                    {
+                                        <a href="@src.Url" target="_blank">@(src.ArticleTitle ?? src.Url)</a>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </details>
+                }
+            </div>
         }
     </div>
 }
@@ -116,36 +142,45 @@
     private string _queryText = string.Empty;
     private bool _webSearchEnabled;
     private bool _loading;
-    private QueryResult? _result;
     private string? _error;
+    private string? _userId;
+    private List<ChatMessageDto> _history = [];
+    private IReadOnlyList<SourceCitation> _lastSources = [];
 
     protected override async Task OnInitializedAsync()
     {
         _books = (await BookCatalogService.GetAllBooksAsync()).ToList();
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userId = authState.User.Identity?.Name;
+        await LoadHistoryAsync();
+    }
+
+    private async Task OnQueryTypeChangedAsync()
+    {
+        _lastSources = [];
+        await LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        if (_userId is null) return;
+        var queryTypeKey = _queryType.ToString().ToLowerInvariant();
+        var messages = await ChatHistoryRepo.GetRecentAsync(_userId, queryTypeKey, 10);
+        _history = messages.Select(m => new ChatMessageDto(m.Role, m.Content)).ToList();
     }
 
     private void ToggleBook(string bookId, bool selected)
     {
-        if (selected)
-        {
-            _selectedBookIds.Add(bookId);
-        }
-        else
-        {
-            _selectedBookIds.Remove(bookId);
-        }
+        if (selected) _selectedBookIds.Add(bookId);
+        else _selectedBookIds.Remove(bookId);
     }
 
     private async Task SubmitQueryAsync()
     {
-        if (string.IsNullOrWhiteSpace(_queryText))
-        {
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(_queryText)) return;
 
         _loading = true;
         _error = null;
-        _result = null;
 
         try
         {
@@ -157,7 +192,12 @@
                 BookIds = _selectedBookIds.Count > 0 ? [.._selectedBookIds] : null,
                 WebSearchEnabled = _webSearchEnabled
             };
-            _result = await QueryService.ExecuteAsync(request);
+            var result = await QueryService.ExecuteAsync(request, _userId);
+
+            _history.Add(new ChatMessageDto("user", _queryText));
+            _history.Add(new ChatMessageDto("assistant", result.Answer));
+            _lastSources = result.Sources;
+            _queryText = string.Empty;
         }
         catch (Exception ex)
         {
@@ -167,5 +207,14 @@
         {
             _loading = false;
         }
+    }
+
+    private async Task ClearHistoryAsync()
+    {
+        if (_userId is null) return;
+        var queryTypeKey = _queryType.ToString().ToLowerInvariant();
+        await ChatHistoryRepo.ClearAsync(_userId, queryTypeKey);
+        _history.Clear();
+        _lastSources = [];
     }
 }

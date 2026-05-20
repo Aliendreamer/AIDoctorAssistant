@@ -2,6 +2,7 @@ using MedAssist.AI.Plugins;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 
@@ -31,7 +32,8 @@ public sealed class RagIterativeLoopTests
             new StubEmbedder(),
             new StubSparseVectorizer(),
             reranker,
-            options ?? DefaultOptions);
+            options ?? DefaultOptions,
+            NullLogger<RagPluginBase>.Instance);
     }
 
     [Fact]
@@ -136,6 +138,50 @@ public sealed class RagIterativeLoopTests
         Assert.Contains("Graves disease", result.Answer);
     }
 
+    [Fact]
+    public async Task CompoundQuery_InitialGather_UsesFullQueryOnly()
+    {
+        // Dictionary expands compound term into fragments (simulates ExtractKeywords behaviour)
+        var dict = new ExpandingStubDictionary(["малкомозъчните тонзили", "тонзили", "малкомозъчните"]);
+        var embedder = new TrackingStubEmbedder();
+        var vectorStore = new StubVectorStore([MakeChunk(1)]);
+        var reranker = new StubReranker(5.0f); // high score → no retries
+
+        var plugin = new SymptomsPlugin(
+            BuildTestKernel(), dict, vectorStore, embedder,
+            new StubSparseVectorizer(), reranker,
+            new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 0 },
+            NullLogger<RagPluginBase>.Instance);
+
+        await plugin.SearchAsync("малкомозъчните тонзили", "bg");
+
+        // Initial gather must embed only the full query — fragments come in retries
+        Assert.Contains("малкомозъчните тонзили", embedder.QueriedTexts);
+        Assert.DoesNotContain("тонзили", embedder.QueriedTexts);
+        Assert.DoesNotContain("малкомозъчните", embedder.QueriedTexts);
+    }
+
+    [Fact]
+    public async Task SingleWordQuery_BehaviourUnchanged()
+    {
+        // Single-word query: expandedTerms == [query], so initial pass is identical to before
+        var dict = new StubDictionary(); // returns [query] unchanged
+        var embedder = new TrackingStubEmbedder();
+        var vectorStore = new StubVectorStore([MakeChunk(1)]);
+        var reranker = new StubReranker(5.0f);
+
+        var plugin = new SymptomsPlugin(
+            BuildTestKernel(), dict, vectorStore, embedder,
+            new StubSparseVectorizer(), reranker,
+            new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 0 },
+            NullLogger<RagPluginBase>.Instance);
+
+        await plugin.SearchAsync("тонзилит", "bg");
+
+        Assert.Single(embedder.QueriedTexts);
+        Assert.Equal("тонзилит", embedder.QueriedTexts[0]);
+    }
+
     private static MedicalChunk MakeChunk(int index) => new()
     {
         BookId = $"book{index}",
@@ -149,6 +195,36 @@ public sealed class RagIterativeLoopTests
         ChunkIndex = index,
         Text = $"Content {index}"
     };
+
+    private sealed class ExpandingStubDictionary(IReadOnlyList<string> terms) : IMedicalDictionary
+    {
+        public Task<IReadOnlyList<string>> ExpandQueryAsync(string query, CancellationToken ct = default)
+            => Task.FromResult(terms);
+
+        public Task<IllnessEntry?> GetByIcdAsync(string icdCode, CancellationToken ct = default)
+            => Task.FromResult<IllnessEntry?>(null);
+
+        public Task<IReadOnlyList<IllnessEntry>> SearchAsync(string query, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<IllnessEntry>>([]);
+
+        public Task<IReadOnlyList<IllnessEntry>> GetAllAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<IllnessEntry>>([]);
+    }
+
+    private sealed class TrackingStubEmbedder : IEmbedder
+    {
+        private readonly List<string> _queried = [];
+        public IReadOnlyList<string> QueriedTexts => _queried;
+
+        public Task<float[]> EmbedQueryAsync(string text, CancellationToken ct = default)
+        {
+            _queried.Add(text);
+            return Task.FromResult(new float[1024]);
+        }
+
+        public Task<float[]> EmbedPassageAsync(string text, CancellationToken ct = default)
+            => Task.FromResult(new float[1024]);
+    }
 
     private sealed class StubDictionary : IMedicalDictionary
     {

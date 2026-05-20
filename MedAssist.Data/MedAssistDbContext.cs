@@ -14,6 +14,7 @@ public sealed class MedAssistDbContext : DbContext
     public DbSet<Bm25StatsEntity> Bm25Stats => Set<Bm25StatsEntity>();
     public DbSet<IngestionCheckpointEntity> IngestionCheckpoints => Set<IngestionCheckpointEntity>();
     public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<ChatMessageEntity> ChatMessages => Set<ChatMessageEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

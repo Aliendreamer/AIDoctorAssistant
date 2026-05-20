@@ -91,7 +91,8 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<IEmbedder>(),
             sp.GetRequiredService<ISparseVectorizer>(),
             sp.GetRequiredService<ICrossEncoderReranker>(),
-            sp.GetRequiredService<IOptions<RagOptions>>().Value));
+            sp.GetRequiredService<IOptions<RagOptions>>().Value,
+            sp.GetRequiredService<ILoggerFactory>()));
 
         services.AddHttpClient<DoclingClient>((sp, client) =>
         {
@@ -104,6 +105,7 @@ internal static class ServiceCollectionExtensions
         services.AddTransient<VocabularyBuilder>();
         services.AddTransient<BookRepository>();
         services.AddTransient<CheckpointRepository>();
+        services.AddTransient<ChatHistoryRepository>();
         services.AddTransient<BookIndexer>();
 
         return services;

@@ -2,6 +2,7 @@ using System.Text;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel.ChatCompletion;
 using SKKernel = Microsoft.SemanticKernel.Kernel;
 
@@ -16,6 +17,7 @@ public abstract class RagPluginBase
     private readonly ISparseVectorizer _sparseVectorizer;
     private readonly ICrossEncoderReranker _reranker;
     private readonly RagOptions _options;
+    private readonly ILogger<RagPluginBase> _logger;
 
     // Each strategy widens the search space progressively.
     // Strategies are indexed by iteration number (0 = first fallback pass after initial search).
@@ -35,7 +37,8 @@ public abstract class RagPluginBase
         IEmbedder embedder,
         ISparseVectorizer sparseVectorizer,
         ICrossEncoderReranker reranker,
-        RagOptions options)
+        RagOptions options,
+        ILogger<RagPluginBase> logger)
     {
         _kernel = kernel;
         _dictionary = dictionary;
@@ -44,6 +47,7 @@ public abstract class RagPluginBase
         _sparseVectorizer = sparseVectorizer;
         _reranker = reranker;
         _options = options;
+        _logger = logger;
     }
 
     protected async Task<QueryResult> ExecuteSearchAsync(
@@ -51,12 +55,15 @@ public abstract class RagPluginBase
         string language,
         string[]? bookIds,
         IReadOnlyList<BookInfo>? books = null,
+        IReadOnlyList<ChatMessageDto>? conversationHistory = null,
         CancellationToken cancellationToken = default)
     {
         var langFilter = ParseLanguage(language);
         var expandedTerms = await _dictionary.ExpandQueryAsync(query, cancellationToken);
 
-        var candidates = await GatherCandidatesAsync(expandedTerms, langFilter, bookIds, topK: 5, cancellationToken);
+        // Use only the full query for the initial pass to preserve compound-term semantics.
+        // Per-keyword fragments from expandedTerms fire in the retry loop below.
+        var candidates = await GatherCandidatesAsync([query], langFilter, bookIds, topK: 5, cancellationToken);
         candidates = await ExpandBySectionAsync(candidates, cancellationToken);
 
         if (candidates.Count == 0)
@@ -93,6 +100,32 @@ public abstract class RagPluginBase
             scored = await _reranker.RerankAsync(query, candidates, cancellationToken);
         }
 
+        var topScore = scored.Count > 0 ? scored[0].Score : float.NegativeInfinity;
+        _logger.LogInformation("Reranker top score for query '{Query}': {Score:F3} (threshold: {Threshold})",
+            query, topScore, _options.MinAnswerScore);
+
+        // Reject if the best result still doesn't meet the answer quality floor
+        if (scored.Count == 0 || topScore < _options.MinAnswerScore)
+        {
+            return new QueryResult { Answer = "The indexed books don't contain sufficiently relevant information to answer this question. Try rephrasing or consult an external source." };
+        }
+
+        // Guard against domain-drift: if the query contains specific Latin terms (medical eponyms,
+        // drug names) that the cross-encoder can't evaluate in Bulgarian context, verify they
+        // actually appear in the retrieved chunks.
+        var latinTerms = ExtractLatinTerms(query);
+        if (latinTerms.Count > 0)
+        {
+            var topTexts = scored.Take(3).Select(s => s.Chunk.Text).ToList();
+            var anyFound = latinTerms.Any(t => topTexts.Any(txt => txt.Contains(t, StringComparison.OrdinalIgnoreCase)));
+            if (!anyFound)
+            {
+                _logger.LogInformation("Latin term check failed for query '{Query}' — terms [{Terms}] absent from top chunks",
+                    query, string.Join(", ", latinTerms));
+                return new QueryResult { Answer = "The indexed books don't contain sufficiently relevant information to answer this question. Try rephrasing or consult an external source." };
+            }
+        }
+
         // Exclude summary chunks from the final answer
         var topChunks = scored
             .Select(s => s.Chunk)
@@ -100,7 +133,7 @@ public abstract class RagPluginBase
             .Take(5)
             .ToList();
 
-        return await BuildResultAsync(query, topChunks, books, cancellationToken);
+        return await BuildResultAsync(query, topChunks, books, conversationHistory, cancellationToken);
     }
 
     private async Task<List<MedicalChunk>> GatherCandidatesAsync(
@@ -169,6 +202,7 @@ public abstract class RagPluginBase
         string query,
         IReadOnlyList<MedicalChunk> chunks,
         IReadOnlyList<BookInfo>? books,
+        IReadOnlyList<ChatMessageDto>? conversationHistory,
         CancellationToken cancellationToken)
     {
         if (chunks.Count == 0)
@@ -190,10 +224,12 @@ public abstract class RagPluginBase
         var systemPrompt = new StringBuilder();
         systemPrompt.AppendLine(
             "You are MedAssist, a clinical decision support assistant for physicians. " +
-            "Answer using only the provided excerpts. Be direct and clinical. " +
-            "Use markdown (headings, bullets, bold terms) where it aids clarity. " +
-            "Cite the book title and section when referencing specific content. " +
-            "If the excerpts are insufficient, say so explicitly — do not speculate.");
+            "IMPORTANT: Write your entire response as flowing prose — continuous sentences and paragraphs only. " +
+            "NEVER use numbered lists, bullet points, dashes, asterisks, bold text, headers, or any markdown. " +
+            "Do not organise your answer as a list of topics. Write as you would explain to a colleague in conversation. " +
+            "Synthesise the excerpts into a coherent paragraph-form answer in your own words. " +
+            "Mention the source book or section naturally within the text when relevant. " +
+            "If the excerpts are insufficient to answer, say so in one sentence — do not speculate.");
 
         if (books is { Count: > 0 })
         {
@@ -218,6 +254,22 @@ public abstract class RagPluginBase
 
         var history = new ChatHistory();
         history.AddSystemMessage(systemPrompt.ToString());
+
+        if (conversationHistory is { Count: > 0 })
+        {
+            foreach (var msg in conversationHistory)
+            {
+                if (msg.Role == "user")
+                {
+                    history.AddUserMessage(msg.Content);
+                }
+                else
+                {
+                    history.AddAssistantMessage(msg.Content);
+                }
+            }
+        }
+
         history.AddUserMessage($"Question: {query}\n\nMedical excerpts:\n\n{context}");
 
         var chat = _kernel.GetRequiredService<IChatCompletionService>();
@@ -233,6 +285,19 @@ public abstract class RagPluginBase
         LanguageCodes.Bulgarian or LanguageCodes.BulgarianName => LanguageFilter.Bulgarian,
         _ => LanguageFilter.Both
     };
+
+    // Extract purely-Latin alphabetic words (≥5 chars) from the query.
+    // These are typically medical eponyms (Chiari, Arnold, Wilson, Parkinson) or
+    // specific English terms that should appear verbatim in relevant chunks.
+    private static IReadOnlyList<string> ExtractLatinTerms(string query)
+    {
+        return query
+            .Split([' ', ',', '.', '!', '?', '(', ')', ':', ';', '\t', '\n', '/', '-'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => w.Length >= 5 && w.All(c => c is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z')))
+            .Select(w => w.ToLowerInvariant())
+            .Distinct()
+            .ToList();
+    }
 
     private sealed record RetryStrategy(int TopK, bool AnyLanguage, bool LongestOnly);
 }

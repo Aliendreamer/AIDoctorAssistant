@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using MedAssist.AI.Kernel;
 using MedAssist.AI.Plugins;
+using MedAssist.Data.Repositories;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Models;
 using Microsoft.SemanticKernel;
@@ -17,6 +18,7 @@ public sealed partial class QueryService
     private readonly BookCatalogService _bookCatalog;
     private readonly HttpClient _httpClient;
     private readonly WebSearchPlugin _webSearchPlugin;
+    private readonly ChatHistoryRepository _chatHistory;
 
     [GeneratedRegex(@"<[^>]+>")]
     private static partial Regex HtmlTagRegex();
@@ -29,17 +31,18 @@ public sealed partial class QueryService
     private static readonly Counter<long> _qdrantResults = _meter.CreateCounter<long>(
         "qdrant_results_total", description: "Total Qdrant results returned");
 
-    public QueryService(Kernel kernel, BookCatalogService bookCatalog, HttpClient httpClient, IConfiguration configuration)
+    public QueryService(Kernel kernel, BookCatalogService bookCatalog, HttpClient httpClient, IConfiguration configuration, ChatHistoryRepository chatHistory)
     {
         _kernel = kernel;
         _bookCatalog = bookCatalog;
         _httpClient = httpClient;
+        _chatHistory = chatHistory;
         var searchEndpoint = configuration["WebSearch:Endpoint"] ?? "http://localhost:8081";
         var allowedDomains = configuration.GetSection("WebSearch:AllowedDomains").Get<List<string>>() ?? [];
         _webSearchPlugin = new WebSearchPlugin(httpClient, searchEndpoint, allowedDomains);
     }
 
-    public async Task<QueryResult> ExecuteAsync(QueryRequest request, CancellationToken cancellationToken = default)
+    public async Task<QueryResult> ExecuteAsync(QueryRequest request, string? userId = null, CancellationToken cancellationToken = default)
     {
         var sw = Stopwatch.StartNew();
         var pluginType = request.QueryType.ToString();
@@ -55,21 +58,36 @@ public sealed partial class QueryService
 
             var bookIds = request.BookIds?.ToArray();
             var query = request.Query;
+            var queryTypeKey = request.QueryType.ToString().ToLowerInvariant();
 
             var allBooks = await _bookCatalog.GetAllBooksAsync(cancellationToken);
             var books = bookIds is { Length: > 0 }
                 ? allBooks.Where(b => bookIds.Contains(b.BookId)).ToArray()
                 : allBooks.ToArray();
 
+            IReadOnlyList<ChatMessageDto> history = [];
+            if (userId is not null)
+            {
+                var recent = await _chatHistory.GetRecentAsync(userId, queryTypeKey, 10, cancellationToken);
+                history = recent.Select(m => new ChatMessageDto(m.Role, m.Content)).ToList();
+            }
+
             QueryResult result = request.QueryType switch
             {
-                QueryType.Symptoms => await InvokePluginAsync<SymptomsPlugin>(query, language, bookIds, books, cancellationToken),
-                QueryType.Disease => await InvokePluginAsync<DiseasePlugin>(query, language, bookIds, books, cancellationToken),
-                QueryType.Treatment => await InvokePluginAsync<TreatmentPlugin>(query, language, bookIds, books, cancellationToken),
+                QueryType.Symptoms => await InvokePluginAsync<SymptomsPlugin>(query, language, bookIds, books, history, cancellationToken),
+                QueryType.Disease => await InvokePluginAsync<DiseasePlugin>(query, language, bookIds, books, history, cancellationToken),
+                QueryType.Treatment => await InvokePluginAsync<TreatmentPlugin>(query, language, bookIds, books, history, cancellationToken),
                 _ => throw new ArgumentOutOfRangeException(nameof(request.QueryType))
             };
 
             _qdrantResults.Add(result.Sources.Count(s => s.SourceType == SourceType.Book));
+
+            if (userId is not null)
+            {
+                var now = DateTimeOffset.UtcNow;
+                await _chatHistory.AddMessageAsync(new() { UserId = userId, QueryType = queryTypeKey, Role = "user", Content = query, CreatedAt = now }, cancellationToken);
+                await _chatHistory.AddMessageAsync(new() { UserId = userId, QueryType = queryTypeKey, Role = "assistant", Content = result.Answer, CreatedAt = now.AddMicroseconds(1) }, cancellationToken);
+            }
 
             if (request.WebSearchEnabled)
             {
@@ -101,6 +119,7 @@ public sealed partial class QueryService
         string language,
         string[]? bookIds,
         BookInfo[] books,
+        IReadOnlyList<ChatMessageDto> conversationHistory,
         CancellationToken cancellationToken)
     {
         var pluginName = KernelFactory.PluginName<TPlugin>();
@@ -110,7 +129,8 @@ public sealed partial class QueryService
             ["query"] = query,
             ["language"] = language,
             ["bookIds"] = bookIds,
-            ["books"] = books
+            ["books"] = books,
+            ["conversationHistory"] = conversationHistory
         }, cancellationToken);
 
         return result.GetValue<QueryResult>() ?? new QueryResult { Answer = "No results found." };

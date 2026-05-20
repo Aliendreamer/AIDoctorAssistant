@@ -2,6 +2,7 @@ using MedAssist.AI.Plugins;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 
 namespace MedAssist.AI.Kernel;
@@ -19,7 +20,8 @@ public static class KernelFactory
         IEmbedder embedder,
         ISparseVectorizer sparseVectorizer,
         ICrossEncoderReranker reranker,
-        RagOptions options)
+        RagOptions options,
+        ILoggerFactory loggerFactory)
     {
         var provider = configuration["AI:ModelProvider"]
             ?? throw new InvalidOperationException("AI:ModelProvider configuration is required.");
@@ -44,9 +46,10 @@ public static class KernelFactory
 
         var kernel = builder.Build();
 
-        kernel.Plugins.AddFromObject(new SymptomsPlugin(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options), PluginName<SymptomsPlugin>());
-        kernel.Plugins.AddFromObject(new DiseasePlugin(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options), PluginName<DiseasePlugin>());
-        kernel.Plugins.AddFromObject(new TreatmentPlugin(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options), PluginName<TreatmentPlugin>());
+        var pluginLogger = loggerFactory.CreateLogger<RagPluginBase>();
+        kernel.Plugins.AddFromObject(new SymptomsPlugin(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options, pluginLogger), PluginName<SymptomsPlugin>());
+        kernel.Plugins.AddFromObject(new DiseasePlugin(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options, pluginLogger), PluginName<DiseasePlugin>());
+        kernel.Plugins.AddFromObject(new TreatmentPlugin(kernel, dictionary, vectorStore, embedder, sparseVectorizer, reranker, options, pluginLogger), PluginName<TreatmentPlugin>());
 
         return kernel;
     }
