@@ -4,135 +4,132 @@
 @using MedAssist.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
 @using SourceType = MedAssist.Shared.Models.SourceType
 @attribute [Authorize(Roles = "Doctor,Admin")]
 @inject QueryService QueryService
 @inject BookCatalogService BookCatalogService
 @inject ChatHistoryRepository ChatHistoryRepo
-@inject HttpClient Http
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <PageTitle>MedAssist — Query</PageTitle>
 
-<h1>Medical Query</h1>
+<div class="query-page">
 
-<div class="query-form">
-    <div class="form-group">
-        <div class="d-flex align-items-center gap-2">
-            <label for="queryType">Query Type</label>
+    <!-- ── Controls ── -->
+    <div class="query-controls">
+        <div class="query-controls-row">
+            <select @bind="_queryType" @bind:after="OnQueryTypeChangedAsync" class="form-select">
+                <option value="@QueryType.Disease">Disease Info</option>
+                <option value="@QueryType.Symptoms">Symptoms</option>
+                <option value="@QueryType.Treatment">Treatment</option>
+            </select>
+
+            <select @bind="_language" class="form-select">
+                <option value="@LanguageFilter.Both">EN + BG</option>
+                <option value="@LanguageFilter.English">English only</option>
+                <option value="@LanguageFilter.Bulgarian">Bulgarian only</option>
+            </select>
+
+            <label class="web-search-toggle">
+                <input type="checkbox" @bind="_webSearchEnabled" />
+                PubMed fallback
+            </label>
+
             @if (_history.Count > 0)
             {
-                <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="ClearHistoryAsync">Clear history</button>
+                <button class="btn btn-sm btn-outline-secondary clear-btn" @onclick="ClearHistoryAsync">Clear history</button>
             }
         </div>
-        <select id="queryType" @bind="_queryType" @bind:after="OnQueryTypeChangedAsync" class="form-select">
-            <option value="@QueryType.Disease">Disease Info</option>
-            <option value="@QueryType.Symptoms">Symptoms</option>
-            <option value="@QueryType.Treatment">Treatment</option>
-        </select>
-    </div>
 
-    <div class="form-group">
-        <label for="queryText">Question</label>
-        <textarea id="queryText" @bind="_queryText" class="form-control" rows="3"
-                  placeholder="e.g. Down Syndrome, or symptoms: fever cough shortness of breath"></textarea>
-    </div>
-
-    <div class="form-group">
-        <label for="language">Language</label>
-        <select id="language" @bind="_language" class="form-select">
-            <option value="@LanguageFilter.Both">Both (EN + BG)</option>
-            <option value="@LanguageFilter.English">English only</option>
-            <option value="@LanguageFilter.Bulgarian">Bulgarian only</option>
-        </select>
-    </div>
-
-    <div class="form-group">
-        <label>Books to search</label>
-        <div class="book-list">
-            @foreach (var book in _books)
-            {
-                <label class="book-item">
-                    <input type="checkbox" value="@book.BookId" @onchange="e => ToggleBook(book.BookId, (bool)(e.Value ?? false))" />
-                    <span class="book-item-info">
-                        <span class="book-item-title">@book.Title</span>
-                        <span class="book-item-meta">@book.Author • @book.Language.ToUpperInvariant()</span>
-                    </span>
-                </label>
-            }
-            @if (_books.Count == 0)
-            {
-                <span class="text-muted">No books indexed yet.</span>
-            }
-        </div>
-    </div>
-
-    <div class="form-group">
-        <label class="web-search-toggle">
-            <input type="checkbox" @bind="_webSearchEnabled" />
-            Search web if needed (PubMed)
-        </label>
-        @if (_webSearchEnabled)
+        @if (_books.Count > 0)
         {
-            <small class="text-muted">Results may include PubMed sources.</small>
-        }
-    </div>
-
-    <button class="btn btn-primary" @onclick="SubmitQueryAsync" disabled="@_loading">
-        @if (_loading)
-        {
-            <span class="spinner-border spinner-border-sm" role="status"></span>
-            <span>Searching...</span>
-        }
-        else
-        {
-            <span>Search</span>
-        }
-    </button>
-</div>
-
-@if (_error is not null)
-{
-    <div class="alert alert-danger mt-3">@_error</div>
-}
-
-@if (_history.Count > 0)
-{
-    <div class="conversation-thread mt-4">
-        @foreach (var (msg, idx) in _history.Select((m, i) => (m, i)))
-        {
-            <div class="chat-message @(msg.Role == "user" ? "chat-message-user" : "chat-message-assistant")">
-                <span class="chat-role">@(msg.Role == "user" ? "You" : "MedAssist")</span>
-                <div class="chat-content">@msg.Content</div>
-                @if (msg.Role == "assistant" && idx == _history.Count - 1 && _lastSources.Count > 0)
+            <div class="book-chips">
+                @foreach (var book in _books)
                 {
-                    <details class="chat-sources mt-1">
-                        <summary class="text-muted small">Sources (@_lastSources.Count)</summary>
-                        <ul class="list-unstyled mb-0 small">
-                            @foreach (var src in _lastSources)
-                            {
-                                <li>
-                                    @if (src.SourceType == SourceType.Book)
-                                    {
-                                        <span>@src.BookTitle</span>
-                                        @if (!string.IsNullOrEmpty(src.ChapterTitle)) { <span> › @src.ChapterTitle</span> }
-                                        @if (!string.IsNullOrEmpty(src.SectionTitle)) { <span> › @src.SectionTitle</span> }
-                                        @if (src.PageStart.HasValue) { <span class="text-muted"> (p. @src.PageStart@(src.PageEnd.HasValue && src.PageEnd != src.PageStart ? $"–{src.PageEnd}" : ""))</span> }
-                                    }
-                                    else if (!string.IsNullOrEmpty(src.Url))
-                                    {
-                                        <a href="@src.Url" target="_blank">@(src.ArticleTitle ?? src.Url)</a>
-                                    }
-                                </li>
-                            }
-                        </ul>
-                    </details>
+                    var selected = _selectedBookIds.Contains(book.BookId);
+                    <label class="book-chip @(selected ? "selected" : "")" title="@book.Author">
+                        <input type="checkbox" value="@book.BookId"
+                               @onchange="e => ToggleBook(book.BookId, (bool)(e.Value ?? false))" />
+                        @book.Title
+                        <span class="book-chip-lang">@book.Language</span>
+                    </label>
                 }
             </div>
         }
     </div>
-}
+
+    <!-- ── Chat area ── -->
+    <div class="chat-container" id="chat-container">
+        @if (_history.Count == 0)
+        {
+            <div class="chat-empty">Ask a medical question to get started.</div>
+        }
+        else
+        {
+            @foreach (var (msg, idx) in _history.Select((m, i) => (m, i)))
+            {
+                <div class="chat-bubble @(msg.Role == "user" ? "chat-bubble-user" : "chat-bubble-assistant")">
+                    <span class="chat-bubble-label">@(msg.Role == "user" ? "You" : "MedAssist")</span>
+                    <div class="chat-bubble-body">@msg.Content</div>
+                    @if (msg.Role == "assistant" && idx == _history.Count - 1 && _lastSources.Count > 0)
+                    {
+                        <details class="chat-sources">
+                            <summary>Sources (@_lastSources.Count)</summary>
+                            <ul class="list-unstyled mb-0 mt-1">
+                                @foreach (var src in _lastSources)
+                                {
+                                    <li class="mb-1">
+                                        @if (src.SourceType == SourceType.Book)
+                                        {
+                                            <span>@src.BookTitle</span>
+                                            @if (!string.IsNullOrEmpty(src.ChapterTitle)) { <span> › @src.ChapterTitle</span> }
+                                            @if (!string.IsNullOrEmpty(src.SectionTitle)) { <span> › @src.SectionTitle</span> }
+                                            @if (src.PageStart.HasValue)
+                                            {
+                                                <span class="text-muted"> (p.&nbsp;@src.PageStart@(src.PageEnd.HasValue && src.PageEnd != src.PageStart ? $"–{src.PageEnd}" : ""))</span>
+                                            }
+                                        }
+                                        else if (!string.IsNullOrEmpty(src.Url))
+                                        {
+                                            <a href="@src.Url" target="_blank">@(src.ArticleTitle ?? src.Url)</a>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        </details>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <!-- ── Error ── -->
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger my-2">@_error</div>
+    }
+
+    <!-- ── Input ── -->
+    <div class="chat-input-area">
+        <textarea @bind="_queryText" @bind:event="oninput"
+                  @onkeydown="HandleKeyDown"
+                  rows="1"
+                  placeholder="Ask a medical question… (Enter to send, Shift+Enter for new line)"></textarea>
+        <button class="chat-send-btn" @onclick="SubmitQueryAsync" disabled="@_loading">
+            @if (_loading)
+            {
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+            }
+            else
+            {
+                <span>Send</span>
+            }
+        </button>
+    </div>
+</div>
 
 @code {
     private List<BookInfo> _books = [];
@@ -155,6 +152,14 @@
         await LoadHistoryAsync();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_history.Count > 0)
+        {
+            await JS.InvokeVoidAsync("eval", "var c=document.getElementById('chat-container');if(c)c.scrollTop=c.scrollHeight;");
+        }
+    }
+
     private async Task OnQueryTypeChangedAsync()
     {
         _lastSources = [];
@@ -173,6 +178,14 @@
     {
         if (selected) _selectedBookIds.Add(bookId);
         else _selectedBookIds.Remove(bookId);
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !_loading)
+        {
+            await SubmitQueryAsync();
+        }
     }
 
     private async Task SubmitQueryAsync()
