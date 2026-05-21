@@ -77,6 +77,8 @@ public sealed partial class QueryService
                 QueryType.Symptoms => await InvokePluginAsync<SymptomsPlugin>(query, language, bookIds, books, history, cancellationToken),
                 QueryType.Disease => await InvokePluginAsync<DiseasePlugin>(query, language, bookIds, books, history, cancellationToken),
                 QueryType.Treatment => await InvokePluginAsync<TreatmentPlugin>(query, language, bookIds, books, history, cancellationToken),
+                QueryType.GlobalSearch => await InvokePluginAsync<GlobalSearchPlugin>(query, language, bookIds, books, history, cancellationToken),
+                QueryType.DifferentialDiagnosis => await InvokePluginAsync<DifferentialDiagnosisPlugin>(query, language, bookIds, books, history, cancellationToken),
                 _ => throw new ArgumentOutOfRangeException(nameof(request.QueryType))
             };
 

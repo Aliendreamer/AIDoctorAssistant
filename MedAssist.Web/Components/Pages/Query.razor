@@ -22,9 +22,11 @@
     <div class="query-controls">
         <div class="query-controls-row">
             <select @bind="_queryType" @bind:after="OnQueryTypeChangedAsync" class="form-select">
+                <option value="@QueryType.GlobalSearch">Global Search</option>
                 <option value="@QueryType.Disease">Disease Info</option>
                 <option value="@QueryType.Symptoms">Symptoms</option>
                 <option value="@QueryType.Treatment">Treatment</option>
+                <option value="@QueryType.DifferentialDiagnosis">Differential Diagnosis</option>
             </select>
 
             <select @bind="_language" class="form-select">
@@ -134,7 +136,7 @@
 @code {
     private List<BookInfo> _books = [];
     private HashSet<string> _selectedBookIds = [];
-    private QueryType _queryType = QueryType.Disease;
+    private QueryType _queryType = QueryType.GlobalSearch;
     private LanguageFilter _language = LanguageFilter.Both;
     private string _queryText = string.Empty;
     private bool _webSearchEnabled;

@@ -13,7 +13,9 @@ public enum QueryType
 {
     Symptoms,
     Disease,
-    Treatment
+    Treatment,
+    GlobalSearch,
+    DifferentialDiagnosis
 }
 
 public enum LanguageFilter

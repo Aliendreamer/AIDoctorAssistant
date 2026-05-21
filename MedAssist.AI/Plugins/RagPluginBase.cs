@@ -222,14 +222,7 @@ public abstract class RagPluginBase
         }).ToList();
 
         var systemPrompt = new StringBuilder();
-        systemPrompt.AppendLine(
-            "You are MedAssist, a clinical decision support assistant for physicians. " +
-            "IMPORTANT: Write your entire response as flowing prose — continuous sentences and paragraphs only. " +
-            "NEVER use numbered lists, bullet points, dashes, asterisks, bold text, headers, or any markdown. " +
-            "Do not organise your answer as a list of topics. Write as you would explain to a colleague in conversation. " +
-            "Synthesise the excerpts into a coherent paragraph-form answer in your own words. " +
-            "Mention the source book or section naturally within the text when relevant. " +
-            "If the excerpts are insufficient to answer, say so in one sentence — do not speculate.");
+        systemPrompt.AppendLine(GetSystemPrompt());
 
         if (books is { Count: > 0 })
         {
@@ -298,6 +291,15 @@ public abstract class RagPluginBase
             .Distinct()
             .ToList();
     }
+
+    protected virtual string GetSystemPrompt() =>
+        "You are MedAssist, a clinical decision support assistant for physicians. " +
+        "IMPORTANT: Write your entire response as flowing prose — continuous sentences and paragraphs only. " +
+        "NEVER use numbered lists, bullet points, dashes, asterisks, bold text, headers, or any markdown. " +
+        "Do not organise your answer as a list of topics. Write as you would explain to a colleague in conversation. " +
+        "Synthesise the excerpts into a coherent paragraph-form answer in your own words. " +
+        "Mention the source book or section naturally within the text when relevant. " +
+        "If the excerpts are insufficient to answer, say so in one sentence — do not speculate.";
 
     private sealed record RetryStrategy(int TopK, bool AnyLanguage, bool LongestOnly);
 }
