@@ -271,7 +271,11 @@ public abstract class RagPluginBase
             }
         }
 
-        history.AddUserMessage($"Question: {query}\n\nMedical excerpts:\n\n{context}");
+        var languageInstruction = query.Any(c => c is >= 'Ѐ' and <= 'ӿ')
+            ? "ВАЖНО: Отговорът трябва да е изцяло на български език. Не използвай никакъв друг език.\n\n"
+            : "IMPORTANT: Respond entirely in English.\n\n";
+
+        history.AddUserMessage($"{languageInstruction}Question: {query}\n\nMedical excerpts:\n\n{context}");
 
         var chat = _kernel.GetRequiredService<IChatCompletionService>();
         var response = await chat.GetChatMessageContentAsync(history, cancellationToken: cancellationToken);
@@ -321,6 +325,7 @@ public abstract class RagPluginBase
         rewriteHistory.AddSystemMessage(
             "You are a medical search query optimizer. " +
             "Rewrite the follow-up question as a concise, self-contained medical search query using context from the previous question. " +
+            "IMPORTANT: Keep the rewritten query in the exact same language as the follow-up question. " +
             "Output ONLY the rewritten query — no explanation, no quotes.");
         rewriteHistory.AddUserMessage(
             $"Previous question: {lastUser}\n\nFollow-up: {query}\n\nRewritten query:");
