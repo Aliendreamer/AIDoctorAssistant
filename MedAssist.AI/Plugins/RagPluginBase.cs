@@ -306,7 +306,7 @@ public abstract class RagPluginBase
         CancellationToken cancellationToken)
     {
         var wordCount = query.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-        if (wordCount >= 10 || conversationHistory is not { Count: >= 2 })
+        if (wordCount >= 20 || conversationHistory is not { Count: >= 2 })
         {
             return query;
         }
@@ -359,11 +359,12 @@ public abstract class RagPluginBase
         Graves' disease is an autoimmune disorder in which the immune system produces thyroid-stimulating immunoglobulins that bind to and chronically activate TSH receptors, driving the thyroid to overproduce thyroxine. It is the single most common cause of hyperthyroidism, responsible for roughly 80% of cases according to the endocrinology sources indexed here. Patients typically present with a constellation of symptoms reflecting thyroid excess — palpitations, heat intolerance, unintentional weight loss despite a normal or increased appetite, fine tremor, and anxiety. A hallmark not shared with other causes of hyperthyroidism is Graves' ophthalmopathy, in which immune-mediated inflammation of the orbital tissues produces proptosis, periorbital oedema, and in severe cases diplopia or corneal exposure injury. Treatment is chosen based on patient age, goitre size, and disease severity, and the main options are antithyroid drugs such as methimazole, radioactive iodine ablation, or surgical thyroidectomy. The choice between these is discussed at length in the indexed textbooks, which note that antithyroid drugs are preferred as first-line therapy in younger patients and during pregnancy, while definitive ablative treatment is generally preferred when medical therapy fails or relapse occurs.
 
         RULES — follow these without exception:
+        - Always respond in the same language the user asked in. If the question is in Bulgarian, answer in Bulgarian. If in English, answer in English.
         - Write only in paragraphs of complete sentences. No lists of any kind.
         - Do not start any line with a dash, asterisk, number, or heading marker.
         - Do not bold or italicise any text.
         - Weave source references naturally into the prose ("according to the paediatrics textbook…", "as described in the indexed sources…").
-        - If the excerpts are insufficient, say so in one sentence and stop.
+        - If the excerpts are insufficient, say so in one sentence in the user's language and stop.
         """;
 
 
