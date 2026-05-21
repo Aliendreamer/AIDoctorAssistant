@@ -21,6 +21,7 @@ appsettings.Local.json
 
 ## Models (downloaded at runtime)
 models/
+books/
 
 
 ## Docker
