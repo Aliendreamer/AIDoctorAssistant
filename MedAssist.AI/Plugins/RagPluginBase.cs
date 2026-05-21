@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
@@ -59,11 +60,15 @@ public abstract class RagPluginBase
         CancellationToken cancellationToken = default)
     {
         var langFilter = ParseLanguage(language);
-        var expandedTerms = await _dictionary.ExpandQueryAsync(query, cancellationToken);
+
+        // Rewrite short follow-up queries so the search has enough context to retrieve the right content.
+        var searchQuery = await MaybeRewriteQueryAsync(query, conversationHistory, cancellationToken);
+
+        var expandedTerms = await _dictionary.ExpandQueryAsync(searchQuery, cancellationToken);
 
         // Use only the full query for the initial pass to preserve compound-term semantics.
         // Per-keyword fragments from expandedTerms fire in the retry loop below.
-        var candidates = await GatherCandidatesAsync([query], langFilter, bookIds, topK: 5, cancellationToken);
+        var candidates = await GatherCandidatesAsync([searchQuery], langFilter, bookIds, topK: 5, cancellationToken);
         candidates = await ExpandBySectionAsync(candidates, cancellationToken);
 
         if (candidates.Count == 0)
@@ -71,7 +76,7 @@ public abstract class RagPluginBase
             return new QueryResult { Answer = "No relevant information found in the indexed books." };
         }
 
-        var scored = await _reranker.RerankAsync(query, candidates, cancellationToken);
+        var scored = await _reranker.RerankAsync(searchQuery, candidates, cancellationToken);
 
         var maxIter = Math.Min(_options.MaxIterations, 5);
         for (var iter = 0; iter < maxIter; iter++)
@@ -97,12 +102,12 @@ public abstract class RagPluginBase
                 .DistinctBy(c => $"{c.BookId}:{c.ChunkIndex}")
                 .ToList();
 
-            scored = await _reranker.RerankAsync(query, candidates, cancellationToken);
+            scored = await _reranker.RerankAsync(searchQuery, candidates, cancellationToken);
         }
 
         var topScore = scored.Count > 0 ? scored[0].Score : float.NegativeInfinity;
-        _logger.LogInformation("Reranker top score for query '{Query}': {Score:F3} (threshold: {Threshold})",
-            query, topScore, _options.MinAnswerScore);
+        _logger.LogInformation("Reranker top score for query '{Query}' (search: '{SearchQuery}'): {Score:F3} (threshold: {Threshold})",
+            query, searchQuery, topScore, _options.MinAnswerScore);
 
         // Reject if the best result still doesn't meet the answer quality floor
         if (scored.Count == 0 || topScore < _options.MinAnswerScore)
@@ -113,7 +118,7 @@ public abstract class RagPluginBase
         // Guard against domain-drift: if the query contains specific Latin terms (medical eponyms,
         // drug names) that the cross-encoder can't evaluate in Bulgarian context, verify they
         // actually appear in the retrieved chunks.
-        var latinTerms = ExtractLatinTerms(query);
+        var latinTerms = ExtractLatinTerms(searchQuery);
         if (latinTerms.Count > 0)
         {
             var topTexts = scored.Take(3).Select(s => s.Chunk.Text).ToList();
@@ -267,7 +272,7 @@ public abstract class RagPluginBase
 
         var chat = _kernel.GetRequiredService<IChatCompletionService>();
         var response = await chat.GetChatMessageContentAsync(history, cancellationToken: cancellationToken);
-        var answer = response.Content ?? "Unable to generate a response.";
+        var answer = StripMarkdown(response.Content ?? "Unable to generate a response.");
 
         return new QueryResult { Answer = answer, Sources = sources };
     }
@@ -290,6 +295,53 @@ public abstract class RagPluginBase
             .Select(w => w.ToLowerInvariant())
             .Distinct()
             .ToList();
+    }
+
+    private async Task<string> MaybeRewriteQueryAsync(
+        string query,
+        IReadOnlyList<ChatMessageDto>? conversationHistory,
+        CancellationToken cancellationToken)
+    {
+        var wordCount = query.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        if (wordCount >= 10 || conversationHistory is not { Count: >= 2 })
+        {
+            return query;
+        }
+
+        var lastUser = conversationHistory.LastOrDefault(m => m.Role == "user")?.Content;
+        if (lastUser is null || lastUser == query)
+        {
+            return query;
+        }
+
+        var rewriteHistory = new ChatHistory();
+        rewriteHistory.AddSystemMessage(
+            "You are a medical search query optimizer. " +
+            "Rewrite the follow-up question as a concise, self-contained medical search query using context from the previous question. " +
+            "Output ONLY the rewritten query — no explanation, no quotes.");
+        rewriteHistory.AddUserMessage(
+            $"Previous question: {lastUser}\n\nFollow-up: {query}\n\nRewritten query:");
+
+        var chat = _kernel.GetRequiredService<IChatCompletionService>();
+        var response = await chat.GetChatMessageContentAsync(rewriteHistory, cancellationToken: cancellationToken);
+        var rewritten = response.Content?.Trim();
+
+        _logger.LogInformation("Query rewrite: '{Original}' → '{Rewritten}'", query, rewritten);
+        return string.IsNullOrWhiteSpace(rewritten) ? query : rewritten;
+    }
+
+    private static string StripMarkdown(string text)
+    {
+        // Remove heading markers: ## Title → Title
+        text = Regex.Replace(text, @"^#{1,6}\s+", "", RegexOptions.Multiline);
+        // Remove bold/italic: **text** → text, *text* → text
+        text = Regex.Replace(text, @"\*\*(.+?)\*\*", "$1", RegexOptions.Singleline);
+        text = Regex.Replace(text, @"\*(.+?)\*", "$1", RegexOptions.Singleline);
+        // Remove bullet markers: "- item" or "* item" → "item"
+        text = Regex.Replace(text, @"^[ \t]*[-*]\s+", "", RegexOptions.Multiline);
+        // Remove numbered list markers: "1. item" → "item"
+        text = Regex.Replace(text, @"^[ \t]*\d+\.\s+", "", RegexOptions.Multiline);
+        return text.Trim();
     }
 
     protected virtual string GetSystemPrompt() =>
