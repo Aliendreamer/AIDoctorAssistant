@@ -220,6 +220,12 @@ details[open] .chat-sources summary::before,
     max-height: 130px;
     line-height: 1.5;
     transition: border-color 0.15s;
+    overflow-y: auto;
+    scrollbar-width: none;
+}
+
+.chat-input-area textarea::-webkit-scrollbar {
+    display: none;
 }
 
 .chat-input-area textarea:focus {
