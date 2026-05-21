@@ -11,7 +11,7 @@ public sealed class ChatMessageEntityConfiguration : IEntityTypeConfiguration<Ch
         builder.ToTable("chat_messages", t =>
         {
             t.HasCheckConstraint("ck_chat_messages_query_type",
-                "query_type IN ('disease', 'symptoms', 'treatment')");
+                "query_type IN ('disease', 'symptoms', 'treatment', 'globalsearch', 'differentialdiagnosis')");
             t.HasCheckConstraint("ck_chat_messages_role",
                 "role IN ('user', 'assistant')");
         });
