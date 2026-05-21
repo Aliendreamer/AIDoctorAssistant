@@ -66,9 +66,12 @@ public abstract class RagPluginBase
 
         var expandedTerms = await _dictionary.ExpandQueryAsync(searchQuery, cancellationToken);
 
-        // Use only the full query for the initial pass to preserve compound-term semantics.
-        // Per-keyword fragments from expandedTerms fire in the retry loop below.
-        var candidates = await GatherCandidatesAsync([searchQuery], langFilter, bookIds, topK: 5, cancellationToken);
+        // Search with both original and rewritten query — the rewrite enriches semantics but the
+        // original anchors retrieval when the rewrite drifts from the indexed vocabulary.
+        var initialTerms = searchQuery == query
+            ? (IReadOnlyList<string>)[query]
+            : [query, searchQuery];
+        var candidates = await GatherCandidatesAsync(initialTerms, langFilter, bookIds, topK: 5, cancellationToken);
         candidates = await ExpandBySectionAsync(candidates, cancellationToken);
 
         if (candidates.Count == 0)
