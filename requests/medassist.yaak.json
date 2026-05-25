@@ -151,6 +151,66 @@
       "authentication": {}
     },
     {
+      "_id": "req_books_extract",
+      "_type": "request",
+      "parentId": "fld_admin",
+      "name": "Extract book (Marker OCR only)",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/admin/books/extract",
+      "parameters": [
+        { "name": "id", "value": "{{ _.bookId }}" }
+      ],
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": { "mimeType": "" },
+      "authentication": {}
+    },
+    {
+      "_id": "req_books_extract_all",
+      "_type": "request",
+      "parentId": "fld_admin",
+      "name": "Bulk extract all books (Marker OCR)",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/admin/books/extract/all",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": { "mimeType": "" },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_books_extract_status_one",
+      "_type": "request",
+      "parentId": "fld_admin",
+      "name": "Extraction status (single book)",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/admin/books/extract/status",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": { "mimeType": "" },
+      "parameters": [
+        { "name": "id", "value": "{{ _.bookId }}" }
+      ],
+      "authentication": {}
+    },
+    {
+      "_id": "req_books_extract_status_all",
+      "_type": "request",
+      "parentId": "fld_admin",
+      "name": "Extraction status (all books)",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/admin/books/extract/status",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "body": { "mimeType": "" },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
       "_id": "req_books_index",
       "_type": "request",
       "parentId": "fld_admin",
@@ -297,6 +357,42 @@
       "body": {
         "mimeType": "application/json",
         "text": "{\n  \"query\": \"лечение на хипертония\",\n  \"queryType\": \"Treatment\",\n  \"language\": \"Bulgarian\",\n  \"webSearchEnabled\": true\n}"
+      },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_query_global",
+      "_type": "request",
+      "parentId": "fld_query",
+      "name": "Global search",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/query",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"query\": \"Chiari malformation type 2\",\n  \"queryType\": \"GlobalSearch\",\n  \"language\": \"Both\",\n  \"webSearchEnabled\": false\n}"
+      },
+      "parameters": [],
+      "authentication": {}
+    },
+    {
+      "_id": "req_query_diff_diagnosis",
+      "_type": "request",
+      "parentId": "fld_query",
+      "name": "Differential diagnosis",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/query",
+      "headers": [
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" },
+        { "name": "Content-Type", "value": "application/json" }
+      ],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"query\": \"child with fever 5 days strawberry tongue rash conjunctival injection\",\n  \"queryType\": \"DifferentialDiagnosis\",\n  \"language\": \"Both\",\n  \"webSearchEnabled\": false\n}"
       },
       "parameters": [],
       "authentication": {}

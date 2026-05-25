@@ -91,14 +91,16 @@ public sealed partial class QueryService
                 await _chatHistory.AddMessageAsync(new() { UserId = userId, QueryType = queryTypeKey, Role = "assistant", Content = result.Answer, CreatedAt = now.AddMicroseconds(1) }, cancellationToken);
             }
 
-            if (request.WebSearchEnabled)
+            if (request.WebSearchEnabled || result.RequiresWebFallback)
             {
                 try
                 {
                     var webResults = await _webSearchPlugin.SearchAsync(query, language, cancellationToken);
                     if (webResults.Count > 0)
                     {
-                        result = await EnrichWithWebAsync(result, webResults, query, cancellationToken);
+                        result = result.RequiresWebFallback
+                            ? await AnswerFromWebAsync(webResults, query, cancellationToken)
+                            : await EnrichWithWebAsync(result, webResults, query, cancellationToken);
                     }
                 }
                 catch (Exception ex) when (ex is TaskCanceledException or HttpRequestException)
@@ -171,14 +173,14 @@ public sealed partial class QueryService
 
         var history = new ChatHistory();
         history.AddSystemMessage(
-            "You are MedAssist, a clinical decision support assistant. " +
+            "You are MedAssist, a clinical decision support assistant for physicians. " +
             "Synthesize a single cohesive answer from the book-based answer and the web excerpts below. " +
-            "Prefer book sources. Cite web sources by article title when you use them. " +
-            "Be direct, clinical, and use markdown where it aids clarity.");
+            "Prefer book sources. Cite web sources naturally in prose by article title when you use them. " +
+            "Write only in paragraphs of complete sentences. No bullet points, no headers, no bold or italic text.");
         history.AddUserMessage(
             $"Question: {query}\n\n" +
-            $"## Answer from indexed books\n\n{bookResult.Answer}\n\n" +
-            $"## Additional web excerpts\n\n{webContext}");
+            $"Answer from indexed books:\n\n{bookResult.Answer}\n\n" +
+            $"Additional web excerpts:\n\n{webContext}");
 
         var chat = _kernel.GetRequiredService<IChatCompletionService>();
         var response = await chat.GetChatMessageContentAsync(history, cancellationToken: cancellationToken);
@@ -189,6 +191,55 @@ public sealed partial class QueryService
             Answer = enrichedAnswer,
             Sources = [.. bookResult.Sources, .. webSources]
         };
+    }
+
+    private async Task<QueryResult> AnswerFromWebAsync(
+        IReadOnlyList<SourceCitation> webSources,
+        string query,
+        CancellationToken cancellationToken)
+    {
+        var fetchTasks = webSources
+            .Where(s => !string.IsNullOrEmpty(s.Url))
+            .Take(3)
+            .Select(s => FetchPageSnippetAsync(s.Url!, cancellationToken));
+
+        var snippets = await Task.WhenAll(fetchTasks);
+
+        var webContext = new StringBuilder();
+        for (var i = 0; i < webSources.Count && i < snippets.Length; i++)
+        {
+            if (string.IsNullOrWhiteSpace(snippets[i]))
+            {
+                continue;
+            }
+
+            webContext.AppendLine($"[{webSources[i].ArticleTitle} — {webSources[i].Url}]");
+            webContext.AppendLine(snippets[i]);
+            webContext.AppendLine();
+        }
+
+        if (webContext.Length == 0)
+        {
+            return new QueryResult { Answer = "No relevant information found in the indexed books or trusted web sources.", Sources = webSources };
+        }
+
+        var languageInstruction = query.Any(c => c is >= 'Ѐ' and <= 'ӿ')
+            ? "ВАЖНО: Отговорът трябва да е изцяло на български език.\n\n"
+            : "IMPORTANT: Respond entirely in English.\n\n";
+
+        var history = new ChatHistory();
+        history.AddSystemMessage(
+            "You are MedAssist, a clinical decision support assistant for physicians. " +
+            "Answer the question using only the web excerpts provided. " +
+            "Cite sources naturally in prose by article title. " +
+            "Write only in paragraphs of complete sentences. No bullet points, no headers, no bold or italic text.");
+        history.AddUserMessage($"{languageInstruction}Question: {query}\n\nWeb excerpts:\n\n{webContext}");
+
+        var chat = _kernel.GetRequiredService<IChatCompletionService>();
+        var response = await chat.GetChatMessageContentAsync(history, cancellationToken: cancellationToken);
+        var answer = response.Content ?? "Unable to generate a response from web sources.";
+
+        return new QueryResult { Answer = answer, Sources = webSources };
     }
 
     private async Task<string?> FetchPageSnippetAsync(string url, CancellationToken cancellationToken)

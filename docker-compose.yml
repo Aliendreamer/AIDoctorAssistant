@@ -11,10 +11,10 @@ services:
       - VectorStore__Qdrant__Endpoint=http://qdrant:6334
       - AI__ModelProvider=ollama
       - AI__Ollama__Endpoint=http://ollama:11434
-      - AI__Ollama__ModelName=qwen2.5:7b
+      - AI__Ollama__ModelName=gemma2:9b
       - Database__ConnectionString=Host=postgres;Database=medassist;Username=medassist;Password=medassist
       - Models__Path=/models
-      - Docling__Endpoint=http://docling:5001
+      - Marker__Endpoint=http://marker:5002
       - OpenTelemetry__Endpoint=http://otel-collector:4317
       - OpenTelemetry__ServiceName=medassist-web
       - WebSearch__Endpoint=http://searxng:8080
@@ -22,7 +22,6 @@ services:
     volumes:
       - medassist-models:/models
       - ./books/raw:/books/raw
-      - ./books/processed:/books/processed:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,13 +31,35 @@ services:
         condition: service_started
       otel-collector:
         condition: service_started
+      marker:
+        condition: service_healthy
     networks:
       - medassist-net
 
-  docling:
-    image: ghcr.io/docling-project/docling-serve-cu128:latest
+  marker:
+    build:
+      context: ./docker/marker
+      dockerfile: Dockerfile
     ports:
-      - "5001:5001"
+      - "5002:5002"
+    environment:
+      - MARKER_LLM_ENDPOINT=http://ollama:11434/v1
+      - MARKER_LLM_MODEL=qwen2.5vl:7b
+    volumes:
+      - ./books/raw:/books/raw
+      - marker-models:/root/.cache/datalab
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request, json; r=urllib.request.urlopen('http://localhost:5002/health', timeout=5); d=json.loads(r.read()); exit(0 if d.get('models_loaded') else 1)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 10m
     deploy:
       resources:
         reservations:
@@ -80,8 +101,8 @@ services:
   qdrant:
     image: qdrant/qdrant:latest
     ports:
-      - "6333:6333"   # REST API + healthcheck
-      - "6334:6334"   # gRPC (used by QdrantClient)
+      - "6333:6333" # REST API + healthcheck
+      - "6334:6334" # gRPC (used by QdrantClient)
     volumes:
       - qdrant-data:/qdrant/storage
     healthcheck:
@@ -127,10 +148,10 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     ports:
-      - "4317:4317"    # OTLP gRPC
-      - "4318:4318"    # OTLP HTTP
-      - "8888:8888"    # Prometheus metrics (self-observability)
-      - "13133:13133"  # Health check
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8888:8888" # Prometheus metrics (self-observability)
+      - "13133:13133" # Health check
     volumes:
       - ./docker/otel-collector/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
@@ -142,8 +163,8 @@ services:
   tempo:
     image: grafana/tempo:latest
     ports:
-      - "3200:3200"    # HTTP API + query frontend
-      - "9095:9095"    # gRPC
+      - "3200:3200" # HTTP API + query frontend
+      - "9095:9095" # gRPC
     volumes:
       - ./docker/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
       - tempo-data:/var/tempo
@@ -191,6 +212,7 @@ volumes:
   grafana-data:
   tempo-data:
   medassist-models:
+  marker-models:
 
 networks:
   medassist-net:

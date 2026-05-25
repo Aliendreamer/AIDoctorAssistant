@@ -81,17 +81,18 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
 
                 if (File.Exists(markdownPath))
                 {
-                    _logger.LogInformation("Using cached Docling markdown for {BookId}", bookId);
+                    _logger.LogInformation("Using cached markdown for {BookId}", bookId);
                     markdown = await File.ReadAllTextAsync(markdownPath);
                 }
                 else
                 {
-                    var docling = bgScope.ServiceProvider.GetRequiredService<DoclingClient>();
-                    _logger.LogInformation("Starting Docling conversion for {BookId}", bookId);
-                    await using var pdfStream = File.OpenRead(pdfPath);
-                    markdown = await docling.ConvertPdfToMarkdownAsync(pdfStream, $"{bookId}.pdf");
+                    var marker = bgScope.ServiceProvider.GetRequiredService<MarkerClient>();
+                    _logger.LogInformation("Submitting Marker job for {BookId} at {Path}", bookId, pdfPath);
+                    var jobId = await marker.StartConversionAsync(pdfPath);
+                    _logger.LogInformation("Polling Marker job {JobId} for {BookId}", jobId, bookId);
+                    markdown = await marker.PollStatusAsync(jobId);
                     await File.WriteAllTextAsync(markdownPath, markdown);
-                    _logger.LogInformation("Docling conversion done for {BookId}, markdown cached at {Path}", bookId, markdownPath);
+                    _logger.LogInformation("Marker conversion done for {BookId}, markdown cached at {Path}", bookId, markdownPath);
                 }
 
                 _logger.LogInformation("Starting indexing for {BookId}", bookId);

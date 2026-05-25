@@ -140,13 +140,37 @@
     align-items: flex-start;
 }
 
+.chat-bubble-label-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0 0.4rem;
+}
+
 .chat-bubble-label {
     font-size: 0.68rem;
     color: var(--text-secondary);
     font-weight: 500;
-    padding: 0 0.4rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+}
+
+.web-badge {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    line-height: 1.4;
+}
+
+.web-source-icon {
+    font-size: 0.75rem;
+    margin-right: 0.25rem;
 }
 
 .chat-bubble-body {

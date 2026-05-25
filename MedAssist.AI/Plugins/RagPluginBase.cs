@@ -81,6 +81,15 @@ public abstract class RagPluginBase
 
         var scored = await _reranker.RerankAsync(searchQuery, candidates, cancellationToken);
 
+        // CRAG "INCORRECT" branch: initial score is so low that retrying won't help — signal web fallback.
+        var initialScore = scored.Count > 0 ? scored[0].Score : float.NegativeInfinity;
+        if (initialScore < _options.MinRetryScore)
+        {
+            _logger.LogInformation("Initial score {Score:F3} below MinRetryScore {Threshold} — skipping retries, flagging web fallback",
+                initialScore, _options.MinRetryScore);
+            return new QueryResult { RequiresWebFallback = true, Answer = "The indexed books don't contain sufficiently relevant information to answer this question. Try rephrasing or consult an external source." };
+        }
+
         var maxIter = Math.Min(_options.MaxIterations, 5);
         for (var iter = 0; iter < maxIter; iter++)
         {

@@ -68,7 +68,23 @@ Content-Type: application/pdf
 < ./my-book.pdf
 ------Boundary--
 
-### Trigger indexing — Docling OCR + RAG pipeline runs in background
+### Extract PDF to markdown only (Marker OCR, no Qdrant indexing)
+POST {{baseUrl}}/api/admin/books/extract?id={{bookId}}
+Authorization: Bearer {{token}}
+
+### Bulk extract all books to markdown (Marker OCR, runs sequentially in background)
+POST {{baseUrl}}/api/admin/books/extract/all
+Authorization: Bearer {{token}}
+
+### Extraction status for a single book
+GET {{baseUrl}}/api/admin/books/extract/status?id={{bookId}}
+Authorization: Bearer {{token}}
+
+### Extraction status for all tracked books
+GET {{baseUrl}}/api/admin/books/extract/status
+Authorization: Bearer {{token}}
+
+### Trigger indexing — Marker OCR + RAG pipeline runs in background
 POST {{baseUrl}}/api/admin/index?id={{bookId}}
 Authorization: Bearer {{token}}
 
@@ -158,6 +174,30 @@ Content-Type: application/json
   "queryType": "Treatment",
   "language": "Bulgarian",
   "webSearchEnabled": true
+}
+
+### Global search (no category restriction, all books)
+POST {{baseUrl}}/api/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "Chiari malformation type 2",
+  "queryType": "GlobalSearch",
+  "language": "Both",
+  "webSearchEnabled": false
+}
+
+### Differential diagnosis from symptom cluster
+POST {{baseUrl}}/api/query
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "child with fever 5 days strawberry tongue rash conjunctival injection",
+  "queryType": "DifferentialDiagnosis",
+  "language": "Both",
+  "webSearchEnabled": false
 }
 
 # ─────────────────────────────────────────

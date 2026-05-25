@@ -75,14 +75,20 @@
             @foreach (var (msg, idx) in _history.Select((m, i) => (m, i)))
             {
                 <div class="chat-bubble @(msg.Role == "user" ? "chat-bubble-user" : "chat-bubble-assistant")">
-                    <span class="chat-bubble-label">@(msg.Role == "user" ? "You" : "MedAssist")</span>
+                    <div class="chat-bubble-label-row">
+                        <span class="chat-bubble-label">@(msg.Role == "user" ? "You" : "MedAssist")</span>
+                        @if (MessageHasWebSources(idx))
+                        {
+                            <span class="web-badge" title="This answer includes web search results">Web</span>
+                        }
+                    </div>
                     <div class="chat-bubble-body">@msg.Content</div>
-                    @if (msg.Role == "assistant" && idx == _history.Count - 1 && _lastSources.Count > 0)
+                    @if (GetMessageSources(idx) is { Count: > 0 } msgSources)
                     {
                         <details class="chat-sources">
-                            <summary>Sources (@_lastSources.Count)</summary>
+                            <summary>Sources (@msgSources.Count)</summary>
                             <ul class="list-unstyled mb-0 mt-1">
-                                @foreach (var src in _lastSources)
+                                @foreach (var src in msgSources)
                                 {
                                     <li class="mb-1">
                                         @if (src.SourceType == SourceType.Book)
@@ -95,9 +101,17 @@
                                                 <span class="text-muted"> (p.&nbsp;@src.PageStart@(src.PageEnd.HasValue && src.PageEnd != src.PageStart ? $"–{src.PageEnd}" : ""))</span>
                                             }
                                         }
-                                        else if (!string.IsNullOrEmpty(src.Url))
+                                        else if (src.SourceType == SourceType.Web)
                                         {
-                                            <a href="@src.Url" target="_blank">@(src.ArticleTitle ?? src.Url)</a>
+                                            <span class="web-source-icon">&#127760;</span>
+                                            @if (!string.IsNullOrEmpty(src.Url))
+                                            {
+                                                <a href="@src.Url" target="_blank" rel="noopener noreferrer">@(src.ArticleTitle ?? src.Url)</a>
+                                            }
+                                            else
+                                            {
+                                                <span>@(src.ArticleTitle ?? "Web source")</span>
+                                            }
                                         }
                                     </li>
                                 }
@@ -145,7 +159,7 @@
     private string? _error;
     private string? _userId;
     private List<ChatMessageDto> _history = [];
-    private IReadOnlyList<SourceCitation> _lastSources = [];
+    private Dictionary<int, IReadOnlyList<SourceCitation>> _sourcesPerMessage = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -165,7 +179,7 @@
 
     private async Task OnQueryTypeChangedAsync()
     {
-        _lastSources = [];
+        _sourcesPerMessage.Clear();
         await LoadHistoryAsync();
     }
 
@@ -212,7 +226,10 @@
 
             _history.Add(new ChatMessageDto("user", _queryText));
             _history.Add(new ChatMessageDto("assistant", result.Answer));
-            _lastSources = result.Sources;
+            if (result.Sources.Count > 0)
+            {
+                _sourcesPerMessage[_history.Count - 1] = result.Sources;
+            }
             _queryText = string.Empty;
         }
         catch (Exception ex)
@@ -225,12 +242,18 @@
         }
     }
 
+    private IReadOnlyList<SourceCitation> GetMessageSources(int idx)
+        => _sourcesPerMessage.TryGetValue(idx, out var sources) ? sources : [];
+
+    private bool MessageHasWebSources(int idx)
+        => _sourcesPerMessage.TryGetValue(idx, out var sources) && sources.Any(s => s.SourceType == SourceType.Web);
+
     private async Task ClearHistoryAsync()
     {
         if (_userId is null) return;
         var queryTypeKey = _queryType.ToString().ToLowerInvariant();
         await ChatHistoryRepo.ClearAsync(_userId, queryTypeKey);
         _history.Clear();
-        _lastSources = [];
+        _sourcesPerMessage.Clear();
     }
 }

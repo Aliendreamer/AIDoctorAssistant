@@ -11,6 +11,11 @@ public sealed class RagOptions
     // of synthesising from low-relevance content. Tune alongside ConfidenceThreshold.
     public float MinAnswerScore { get; init; } = 1.5f;
 
+    // If the initial retrieval scores below this, skip the retry loop entirely and signal
+    // the caller to fall back to web search (CRAG "INCORRECT" branch).
+    // Must be ≤ MinAnswerScore — setting it higher than MinAnswerScore would make retries unreachable.
+    public float MinRetryScore { get; init; } = 1.0f;
+
     // Refinement passes after the initial search. Each pass widens the search space.
     // Actual iterations = Min(MaxIterations, 5).
     public int MaxIterations { get; init; } = 2;

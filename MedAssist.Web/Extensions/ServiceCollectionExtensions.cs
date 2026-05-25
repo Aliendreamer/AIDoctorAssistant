@@ -52,7 +52,7 @@ internal static class ServiceCollectionExtensions
     {
         services.Configure<ModelsOptions>(configuration.GetSection("Models"));
         services.Configure<QdrantOptions>(configuration.GetSection("VectorStore:Qdrant"));
-        services.Configure<DoclingOptions>(configuration.GetSection("Docling"));
+        services.Configure<MarkerOptions>(configuration.GetSection("Marker"));
 
         services.AddHttpClient<ModelInitializer>((sp, client) =>
         {
@@ -94,11 +94,18 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<IOptions<RagOptions>>().Value,
             sp.GetRequiredService<ILoggerFactory>()));
 
-        services.AddHttpClient<DoclingClient>((sp, client) =>
+        services.AddHttpClient("marker", (sp, client) =>
         {
-            var opts = sp.GetRequiredService<IOptions<DoclingOptions>>().Value;
+            var opts = sp.GetRequiredService<IOptions<MarkerOptions>>().Value;
             client.BaseAddress = new Uri(opts.Endpoint);
             client.Timeout = TimeSpan.FromMinutes(opts.TimeoutMinutes);
+        });
+        services.AddTransient<MarkerClient>(sp =>
+        {
+            var opts = sp.GetRequiredService<IOptions<MarkerOptions>>().Value;
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("marker");
+            var logger = sp.GetRequiredService<ILogger<MarkerClient>>();
+            return new MarkerClient(httpClient, opts.UseLlm, logger);
         });
         services.AddTransient<MarkdownChunker>();
         services.AddTransient<ChunkEnricher>();
@@ -107,6 +114,7 @@ internal static class ServiceCollectionExtensions
         services.AddTransient<CheckpointRepository>();
         services.AddTransient<ChatHistoryRepository>();
         services.AddTransient<BookIndexer>();
+        services.AddSingleton<ExtractionTracker>();
 
         return services;
     }

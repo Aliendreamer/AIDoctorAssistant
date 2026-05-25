@@ -42,6 +42,12 @@ public sealed class BookRepository(MedAssistDbContext db)
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<BookInfo>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        var entities = await db.Books.ToListAsync(cancellationToken);
+        return entities.Select(MapToInfo).ToList();
+    }
+
     public async Task<BookInfo?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         var entity = await db.Books.FindAsync([id], cancellationToken);
