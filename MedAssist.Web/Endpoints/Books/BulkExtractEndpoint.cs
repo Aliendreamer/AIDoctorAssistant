@@ -32,6 +32,11 @@ public sealed class BulkExtractEndpoint : EndpointWithoutRequest
 
         var eligible = books
             .Where(b => !string.IsNullOrEmpty(b.FilePath) && File.Exists(b.FilePath) && !_tracker.IsRunning(b.Id))
+            .Where(b =>
+            {
+                var mdPath = Path.ChangeExtension(b.FilePath, ".md");
+                return !File.Exists(mdPath) || File.GetLastWriteTimeUtc(mdPath) <= File.GetLastWriteTimeUtc(b.FilePath);
+            })
             .ToList();
 
         if (eligible.Count == 0)

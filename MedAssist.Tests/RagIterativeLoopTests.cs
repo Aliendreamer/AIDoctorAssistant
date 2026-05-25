@@ -10,8 +10,14 @@ namespace MedAssist.Tests;
 
 public sealed class RagIterativeLoopTests
 {
-    // Default options: threshold 0.0, 2 iterations
-    private static RagOptions DefaultOptions => new() { ConfidenceThreshold = 0.0f, MaxIterations = 2 };
+    // Default options: score thresholds set to minimum so stub scores never trigger early exits
+    private static RagOptions DefaultOptions => new()
+    {
+        ConfidenceThreshold = 0.0f,
+        MaxIterations = 2,
+        MinRetryScore = float.NegativeInfinity,
+        MinAnswerScore = float.NegativeInfinity
+    };
 
     private static Microsoft.SemanticKernel.Kernel BuildTestKernel()
     {
@@ -42,7 +48,7 @@ public sealed class RagIterativeLoopTests
         // Reranker returns 5.0 > threshold 0.0 → loop exits immediately after the first search
         var vectorStore = new StubVectorStore([MakeChunk(1)]);
         var reranker = new StubReranker(5.0f);
-        var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 5 });
+        var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 5, MinRetryScore = float.NegativeInfinity, MinAnswerScore = float.NegativeInfinity });
 
         await sut.SearchAsync("fever", "en");
 
@@ -55,7 +61,7 @@ public sealed class RagIterativeLoopTests
         // Reranker returns -5.0 < threshold 0.0 → should run MaxIterations fallback passes
         var vectorStore = new StubVectorStore([MakeChunk(1)]);
         var reranker = new StubReranker(-5.0f);
-        var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 3 });
+        var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 3, MinRetryScore = float.NegativeInfinity, MinAnswerScore = float.NegativeInfinity });
 
         await sut.SearchAsync("fever", "en");
 
@@ -69,7 +75,7 @@ public sealed class RagIterativeLoopTests
         // MaxIterations=10 in config should be capped at 5 by the implementation
         var vectorStore = new StubVectorStore([MakeChunk(1)]);
         var reranker = new StubReranker(-10.0f);
-        var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 10 });
+        var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 10, MinRetryScore = float.NegativeInfinity, MinAnswerScore = float.NegativeInfinity });
 
         await sut.SearchAsync("fever", "en");
 

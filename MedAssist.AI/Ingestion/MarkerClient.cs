@@ -9,14 +9,14 @@ public sealed class MarkerClient
     private readonly HttpClient _httpClient;
     private readonly bool _useLlm;
     private readonly ILogger<MarkerClient> _logger;
+    private readonly TimeSpan _pollInterval;
 
-    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
-
-    public MarkerClient(HttpClient httpClient, bool useLlm, ILogger<MarkerClient> logger)
+    public MarkerClient(HttpClient httpClient, bool useLlm, ILogger<MarkerClient> logger, TimeSpan? pollInterval = null)
     {
         _httpClient = httpClient;
         _useLlm = useLlm;
         _logger = logger;
+        _pollInterval = pollInterval ?? TimeSpan.FromSeconds(30);
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ public sealed class MarkerClient
     {
         for (var poll = 1; !cancellationToken.IsCancellationRequested; poll++)
         {
-            await Task.Delay(PollInterval, cancellationToken);
+            await Task.Delay(_pollInterval, cancellationToken);
 
             _logger.LogInformation("Marker poll {Poll} for job {JobId}", poll, jobId);
 

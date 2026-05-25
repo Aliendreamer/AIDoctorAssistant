@@ -13,7 +13,11 @@ public sealed partial class MarkdownChunker
     [GeneratedRegex(@"!\[[^\]]*\]\(data:[^)]+\)", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
     private static partial Regex InlineImageRegex();
 
-    // U+00AD soft hyphen optionally followed by whitespace — Docling PDF artifact
+    // Marker image file refs: ![](_page_N_Picture.jpeg) — no semantic value for RAG
+    [GeneratedRegex(@"^\s*!\[[^\]]*\]\([^)]+\.(jpe?g|png|gif|webp|svg)\)\s*$", RegexOptions.Multiline, matchTimeoutMilliseconds: 5000)]
+    private static partial Regex MarkerImageRefRegex();
+
+    // U+00AD soft hyphen optionally followed by whitespace — scanned PDF artifact
     [GeneratedRegex(@"­[ \t]*", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
     private static partial Regex SoftHyphenRegex();
 
@@ -34,8 +38,12 @@ public sealed partial class MarkdownChunker
     [GeneratedRegex(@"(?<=[Ѐ-ӿ])[çãőñõÇÃŐÑÕ]+(?=[Ѐ-ӿ])", RegexOptions.None, matchTimeoutMilliseconds: 5000)]
     private static partial Regex CyrillicPortugueseArtifactRegex();
 
-    private static string StripInlineImages(string markdown) =>
-        InlineImageRegex().Replace(markdown, string.Empty);
+    private static string StripInlineImages(string markdown)
+    {
+        markdown = InlineImageRegex().Replace(markdown, string.Empty);
+        markdown = MarkerImageRefRegex().Replace(markdown, string.Empty);
+        return markdown;
+    }
 
     private static string NormalizeOcrArtifacts(string markdown)
     {

@@ -134,10 +134,7 @@
     "enricher",
     "Enricher",
 
-    "docling",
-    "Docling",
-
-    "reranker",
+"reranker",
     "Reranker",
     "reranking",
     "reranked",

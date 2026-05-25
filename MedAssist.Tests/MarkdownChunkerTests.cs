@@ -136,4 +136,55 @@ public sealed class MarkdownChunkerTests
         var result = _sut.Chunk(md);
         Assert.Contains(result, c => c.Text.Contains(content.Substring(0, 50)));
     }
+
+    // Marker-specific patterns
+
+    [Fact]
+    public void MarkerImageRefs_AreNotProducedAsChunks()
+    {
+        // Marker emits ![](_page_N_Picture.jpeg) — image refs with no base64 data
+        // These lines should not produce standalone chunks
+        var md = "# Section\n\n![](_page_1_Picture_3.jpeg)\n\n![](_page_2_Figure_1.jpeg)\n\n" + new string('x', 300);
+        var result = _sut.Chunk(md);
+        Assert.DoesNotContain(result, c => c.Text.Trim().StartsWith("![]"));
+    }
+
+    [Fact]
+    public void Base64InlineImages_AreStripped()
+    {
+        // Old Docling-style embedded base64 images should be stripped before chunking
+        var base64 = "data:image/png;base64," + new string('A', 500);
+        var md = $"# Section\n\n![Image]({base64})\n\n" + new string('x', 300);
+        var result = _sut.Chunk(md);
+        Assert.DoesNotContain(result, c => c.Text.Contains("base64"));
+    }
+
+    [Fact]
+    public void SpacedLetterOcrArtifact_DoesNotCrashChunker()
+    {
+        // Marker occasionally produces spaced letters from badly scanned pages: "т е ж е с т т а"
+        var md = "# Section\n\nЕКГ демонстрира пълна корелация с т е ж е с т т а на П с т е ноза.\n\n" + new string('x', 300);
+        var result = _sut.Chunk(md);
+        Assert.NotEmpty(result);
+    }
+
+    [Fact]
+    public void SoftHyphenArtifacts_AreNormalized()
+    {
+        // Soft hyphens (U+00AD) from scanned PDFs should be removed
+        var md = "# Section\n\nлекар­ ствата се осъществява от " + new string('x', 200);
+        var result = _sut.Chunk(md);
+        Assert.DoesNotContain(result, c => c.Text.Contains('­'));
+    }
+
+    [Fact]
+    public void MarkerH4Subsections_ProduceCorrectHeadingPath()
+    {
+        // Marker uses #### for subsections under # chapter headings
+        var body = new string('x', 300);
+        var md = $"# РАЗДЕЛ I\n\n#### Педиатрията\n\n{body}";
+        var result = _sut.Chunk(md);
+        Assert.Single(result);
+        Assert.Equal("РАЗДЕЛ I > Педиатрията", result[0].HeadingPath);
+    }
 }
