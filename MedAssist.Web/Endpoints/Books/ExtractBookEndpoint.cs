@@ -68,12 +68,13 @@ public sealed class ExtractBookEndpoint : EndpointWithoutRequest
                 var jobId = await marker.StartConversionAsync(filePath);
 
                 _logger.LogInformation("Polling Marker job {JobId} for {BookId}", jobId, bookId);
-                var markdown = await marker.PollStatusAsync(jobId);
+                var savePath = await marker.PollStatusAsync(jobId);
 
-                // Python already saved the file as a safety net; write here too in case paths differ
-                await File.WriteAllTextAsync(markdownPath, markdown);
+                if (!File.Exists(savePath))
+                    throw new InvalidOperationException($"Marker reported done but file not found: {savePath}");
+
                 _tracker.MarkDone(id);
-                _logger.LogInformation("Marker extraction done for {BookId}, saved to {Path}", bookId, markdownPath);
+                _logger.LogInformation("Marker extraction done for {BookId}, saved to {Path}", bookId, savePath);
             }
             catch (Exception ex)
             {

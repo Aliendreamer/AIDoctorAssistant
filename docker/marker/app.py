@@ -74,7 +74,7 @@ def _run_job(job_id: str, file_path: str, use_llm: bool, save_path: str | None):
                 logger.warning("Job %s: could not save markdown to disk: %s", job_id, save_err)
 
         with _jobs_lock:
-            _jobs[job_id] = {"state": "done", "markdown": markdown}
+            _jobs[job_id] = {"state": "done", "save_path": save_path}
         logger.info("Job %s: done", job_id)
     except Exception as exc:
         logger.exception("Job %s: conversion failed", job_id)
