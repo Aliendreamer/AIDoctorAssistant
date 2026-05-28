@@ -38,7 +38,8 @@ public sealed class MarkerClient
     }
 
     /// <summary>
-    /// Polls /status/{jobId} every 30 s until done or failed. Returns markdown on success.
+    /// Polls /status/{jobId} every 30 s until done or failed. Returns the save_path on success.
+    /// The caller reads the markdown directly from the shared volume at that path.
     /// </summary>
     public async Task<string> PollStatusAsync(string jobId, CancellationToken cancellationToken = default)
     {
@@ -65,8 +66,8 @@ public sealed class MarkerClient
             switch (status.State)
             {
                 case "done":
-                    return status.Markdown
-                        ?? throw new InvalidOperationException("Job done but markdown is missing.");
+                    return status.SavePath
+                        ?? throw new InvalidOperationException("Job done but save_path is missing.");
 
                 case "failed":
                     throw new InvalidOperationException($"Marker job {jobId} failed: {status.Error}");
@@ -113,8 +114,8 @@ public sealed class MarkerClient
         [JsonPropertyName("state")]
         public string? State { get; init; }
 
-        [JsonPropertyName("markdown")]
-        public string? Markdown { get; init; }
+        [JsonPropertyName("save_path")]
+        public string? SavePath { get; init; }
 
         [JsonPropertyName("error")]
         public string? Error { get; init; }

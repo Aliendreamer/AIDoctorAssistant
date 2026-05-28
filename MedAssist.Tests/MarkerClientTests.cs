@@ -25,7 +25,7 @@ public sealed class MarkerClientTests
     }
 
     [Fact]
-    public async Task PollStatusAsync_ReturnsMarkdown_WhenStateDone()
+    public async Task PollStatusAsync_ReturnsSavePath_WhenStateDone()
     {
         var callCount = 0;
         var handler = new FakeHandler(_ =>
@@ -33,13 +33,13 @@ public sealed class MarkerClientTests
             callCount++;
             return callCount < 2
                 ? Json(HttpStatusCode.OK, new { state = "running", elapsed_seconds = 30 })
-                : Json(HttpStatusCode.OK, new { state = "done", markdown = "# Result", elapsed_seconds = 60 });
+                : Json(HttpStatusCode.OK, new { state = "done", save_path = "/books/raw/test.md", elapsed_seconds = 60 });
         });
         var sut = MakeClient(handler);
 
-        var markdown = await sut.PollStatusAsync("abc-123");
+        var savePath = await sut.PollStatusAsync("abc-123");
 
-        Assert.Equal("# Result", markdown);
+        Assert.Equal("/books/raw/test.md", savePath);
         Assert.Equal(2, callCount);
     }
 
@@ -67,13 +67,13 @@ public sealed class MarkerClientTests
                 throw new HttpRequestException("connection reset");
             }
 
-            return Json(HttpStatusCode.OK, new { state = "done", markdown = "# OK", elapsed_seconds = 30 });
+            return Json(HttpStatusCode.OK, new { state = "done", save_path = "/books/raw/test.md", elapsed_seconds = 30 });
         });
         var sut = MakeClient(handler);
 
-        var markdown = await sut.PollStatusAsync("abc-123");
+        var savePath = await sut.PollStatusAsync("abc-123");
 
-        Assert.Equal("# OK", markdown);
+        Assert.Equal("/books/raw/test.md", savePath);
         Assert.Equal(2, callCount);
     }
 

@@ -63,18 +63,22 @@ public sealed class BulkExtractEndpoint : EndpointWithoutRequest
                     await using var bgScope = _scopeFactory.CreateAsyncScope();
                     var marker = bgScope.ServiceProvider.GetRequiredService<MarkerClient>();
 
-                    var markdownPath = Path.ChangeExtension(book.FilePath, ".md");
                     _logger.LogInformation("Bulk extract [{Done}/{Total}]: submitting Marker job for {BookId}",
                         eligible.IndexOf(book) + 1, eligible.Count, book.BookId);
 
                     var jobId = await marker.StartConversionAsync(book.FilePath);
                     _logger.LogInformation("Bulk extract: polling job {JobId} for {BookId}", jobId, book.BookId);
 
-                    var markdown = await marker.PollStatusAsync(jobId);
+                    // PollStatusAsync returns the path Python wrote to on the shared volume
+                    var savePath = await marker.PollStatusAsync(jobId);
 
-                    await File.WriteAllTextAsync(markdownPath, markdown);
+                    if (!File.Exists(savePath))
+                    {
+                        throw new InvalidOperationException($"Marker reported done but file not found: {savePath}");
+                    }
+
                     _tracker.MarkDone(book.Id);
-                    _logger.LogInformation("Bulk extract: done {BookId} → {Path}", book.BookId, markdownPath);
+                    _logger.LogInformation("Bulk extract: done {BookId} → {Path}", book.BookId, savePath);
                 }
                 catch (Exception ex)
                 {
