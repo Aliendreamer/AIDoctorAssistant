@@ -10,12 +10,14 @@ public sealed class BulkExtractEndpoint : EndpointWithoutRequest
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ExtractionTracker _tracker;
     private readonly ILogger<BulkExtractEndpoint> _logger;
+    private readonly IConfiguration _configuration;
 
-    public BulkExtractEndpoint(IServiceScopeFactory scopeFactory, ExtractionTracker tracker, ILogger<BulkExtractEndpoint> logger)
+    public BulkExtractEndpoint(IServiceScopeFactory scopeFactory, ExtractionTracker tracker, ILogger<BulkExtractEndpoint> logger, IConfiguration configuration)
     {
         _scopeFactory = scopeFactory;
         _tracker = tracker;
         _logger = logger;
+        _configuration = configuration;
     }
 
     public override void Configure()
@@ -30,11 +32,12 @@ public sealed class BulkExtractEndpoint : EndpointWithoutRequest
         var bookRepo = scope.ServiceProvider.GetRequiredService<BookRepository>();
         var books = await bookRepo.GetAllAsync(ct);
 
+        var mdBasePath = _configuration["Books:MdPath"] ?? "/books/mdfiles";
         var eligible = books
             .Where(b => !string.IsNullOrEmpty(b.FilePath) && File.Exists(b.FilePath) && !_tracker.IsRunning(b.Id))
             .Where(b =>
             {
-                var mdPath = Path.ChangeExtension(b.FilePath, ".md");
+                var mdPath = Path.Combine(mdBasePath, $"{b.BookId}.md");
                 return !File.Exists(mdPath) || File.GetLastWriteTimeUtc(mdPath) <= File.GetLastWriteTimeUtc(b.FilePath);
             })
             .ToList();

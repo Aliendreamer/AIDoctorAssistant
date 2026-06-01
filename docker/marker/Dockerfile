@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install torch first so marker-pdf's resolver doesn't replace it
-ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
+ARG TORCH_INDEX=https://download.pytorch.org/whl/nightly/cu128
 RUN pip install --no-cache-dir torch torchvision --index-url ${TORCH_INDEX}
 
 RUN pip install --no-cache-dir \

@@ -14,23 +14,19 @@
   ],
   "words": [
     "Aliendreamer",
-
+    "uniquebooks",
     "medassist",
     "MedAssist",
-
     "qdrant",
     "Qdrant",
     "upsert",
     "upserted",
     "upserting",
-
     "searxng",
     "SearXNG",
-
     "ollama",
     "Ollama",
     "qwen",
-
     "pubmed",
     "PubMed",
     "PMID",
@@ -43,7 +39,6 @@
     "eutils",
     "ncbi",
     "NCBI",
-
     "embedder",
     "Embedder",
     "vectorizer",
@@ -52,10 +47,8 @@
     "vectorized",
     "sparseVectorizer",
     "ISparseVectorizer",
-
     "onnx",
     "ONNX",
-
     "multilingual",
     "tokenizer",
     "tokenizers",
@@ -65,7 +58,6 @@
     "huggingface",
     "HuggingFace",
     "intfloat",
-
     "BM25",
     "bm25",
     "RRF",
@@ -74,11 +66,9 @@
     "idf",
     "vocab",
     "Vocab",
-
     "ICD",
     "icd",
     "icdCode",
-
     "postgres",
     "Postgres",
     "postgresql",
@@ -89,14 +79,12 @@
     "DbContext",
     "DbContextFactory",
     "MigrateAsync",
-
     "SQLite",
     "Sqlite",
     "sqlite",
     "slnx",
     "appsettings",
     "csproj",
-
     "opentelemetry",
     "OpenTelemetry",
     "otelcol",
@@ -109,7 +97,6 @@
     "Tempo",
     "Jaeger",
     "jaeger",
-
     "FastEndpoints",
     "Scalar",
     "NSwag",
@@ -118,13 +105,11 @@
     "serilog",
     "Blazor",
     "blazor",
-
     "openspec",
     "OpenSpec",
     "Yaak",
     "yaak",
     "kebab",
-
     "chunker",
     "Chunker",
     "chunking",
@@ -133,8 +118,7 @@
     "dedup",
     "enricher",
     "Enricher",
-
-"reranker",
+    "reranker",
     "Reranker",
     "reranking",
     "reranked",
@@ -142,16 +126,12 @@
     "minilm",
     "mmarco",
     "marco",
-
     "semaphore",
     "SemaphoreSlim",
-
     "Healthz",
     "healthz",
-
     "contentfiles",
     "buildtransitive",
-
     "Unigram",
     "unigram",
     "Viterbi",
@@ -160,9 +140,7 @@
     "nfkc",
     "sentencepiece",
     "SentencePiece",
-
     "stopwords",
-
     "лечение",
     "хипертония",
     "болест",
@@ -175,7 +153,6 @@
     "заболяване",
     "симптом",
     "признак",
-
     "ASPNETCORE",
     "pgadmin",
     "pgAdmin",

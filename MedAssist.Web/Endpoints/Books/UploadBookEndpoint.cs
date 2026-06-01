@@ -42,11 +42,11 @@ public sealed class UploadBookEndpoint(
 
     public override async Task HandleAsync(UploadBookRequest req, CancellationToken ct)
     {
-        var rawBooksPath = configuration["Books:RawPath"]
-            ?? throw new InvalidOperationException("Books:RawPath is not configured.");
-        Directory.CreateDirectory(rawBooksPath);
+        var pdfPath = configuration["Books:PdfPath"]
+            ?? throw new InvalidOperationException("Books:PdfPath is not configured.");
+        Directory.CreateDirectory(pdfPath);
 
-        var destPath = Path.Combine(rawBooksPath, $"{req.BookId}.pdf");
+        var destPath = Path.Combine(pdfPath, $"{req.BookId}.pdf");
 
         await using (var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
         await using (var input = req.File.OpenReadStream())

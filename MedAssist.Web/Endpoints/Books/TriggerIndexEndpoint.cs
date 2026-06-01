@@ -13,12 +13,14 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<TriggerIndexEndpoint> _logger;
     private readonly MedAssistDbContext _medAssistDbContext;
+    private readonly IConfiguration _configuration;
 
-    public TriggerIndexEndpoint(IServiceScopeFactory scopeFactory, ILogger<TriggerIndexEndpoint> logger, MedAssistDbContext medAssistDbContext)
+    public TriggerIndexEndpoint(IServiceScopeFactory scopeFactory, ILogger<TriggerIndexEndpoint> logger, MedAssistDbContext medAssistDbContext, IConfiguration configuration)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
         _medAssistDbContext = medAssistDbContext;
+        _configuration = configuration;
     }
 
     public override void Configure()
@@ -68,6 +70,7 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
 
         var pdfPath = book.FilePath;
         var bookId = book.BookId;
+        var mdBasePath = _configuration["Books:MdPath"] ?? "/books/mdfiles";
 
         _ = Task.Run(async () =>
         {
@@ -76,7 +79,7 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
                 await using var bgScope = _scopeFactory.CreateAsyncScope();
                 var indexer = bgScope.ServiceProvider.GetRequiredService<BookIndexer>();
 
-                var markdownPath = Path.ChangeExtension(pdfPath, ".md");
+                var markdownPath = Path.Combine(mdBasePath, $"{bookId}.md");
                 string markdown;
 
                 if (File.Exists(markdownPath))

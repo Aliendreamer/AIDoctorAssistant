@@ -20,6 +20,7 @@ artifact_dict = None
 
 LLM_ENDPOINT = os.getenv("MARKER_LLM_ENDPOINT", "http://ollama:11434/v1")
 LLM_MODEL    = os.getenv("MARKER_LLM_MODEL", "qwen2.5vl:7b")
+MD_PATH      = os.getenv("BOOKS_MD_PATH", "/books/mdfiles")
 
 # Single-worker pool — one conversion at a time
 _executor = ThreadPoolExecutor(max_workers=1)
@@ -126,7 +127,8 @@ async def convert_by_path(req: ConvertByPathRequest):
         raise HTTPException(status_code=404, detail=f"File not found: {req.file_path}")
 
     job_id = str(uuid.uuid4())
-    save_path = os.path.splitext(req.file_path)[0] + ".md"
+    os.makedirs(MD_PATH, exist_ok=True)
+    save_path = os.path.join(MD_PATH, os.path.splitext(os.path.basename(req.file_path))[0] + ".md")
 
     with _jobs_lock:
         _jobs[job_id] = {"state": "running", "started_at": time.time()}

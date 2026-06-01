@@ -38,7 +38,11 @@
       "Bash(git push -f*)",
       "Bash(git reset --hard*)",
       "Bash(git branch -D*)",
-      "Bash(git branch --delete --force*)"
+      "Bash(git branch --delete --force*)",
+      "Bash(docker compose build*)",
+      "Bash(docker compose up*)",
+      "Bash(docker-compose build*)",
+      "Bash(docker-compose up*)"
     ]
   },
   "mcpServers": {

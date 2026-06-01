@@ -55,7 +55,6 @@ public sealed class ExtractBookEndpoint : EndpointWithoutRequest
 
         var bookId = book.BookId;
         var filePath = book.FilePath;
-        var markdownPath = Path.ChangeExtension(filePath, ".md");
 
         _ = Task.Run(async () =>
         {

@@ -18,10 +18,12 @@ services:
       - OpenTelemetry__Endpoint=http://otel-collector:4317
       - OpenTelemetry__ServiceName=medassist-web
       - WebSearch__Endpoint=http://searxng:8080
-      - Books__RawPath=/books/raw
+      - Books__PdfPath=/books/uniquebooks
+      - Books__MdPath=/books/mdfiles
     volumes:
       - medassist-models:/models
-      - ./books/raw:/books/raw
+      - ./books/uniquebooks:/books/uniquebooks
+      - ./books/mdFiles:/books/mdfiles
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,8 +47,10 @@ services:
     environment:
       - MARKER_LLM_ENDPOINT=http://ollama:11434/v1
       - MARKER_LLM_MODEL=qwen2.5vl:7b
+      - BOOKS_MD_PATH=/books/mdfiles
     volumes:
-      - ./books/raw:/books/raw
+      - ./books/uniquebooks:/books/uniquebooks
+      - ./books/mdFiles:/books/mdfiles
       - marker-models:/root/.cache/datalab
     healthcheck:
       test:
