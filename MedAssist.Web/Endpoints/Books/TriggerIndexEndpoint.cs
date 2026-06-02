@@ -55,7 +55,7 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
 
         var checkpointRepo = scope.ServiceProvider.GetRequiredService<CheckpointRepository>();
 
-        var force = Query<string>("force")?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+        var force = Query<string>("force", isRequired: false)?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
         if (force)
         {
             var vectorStore = scope.ServiceProvider.GetRequiredService<IVectorStore>();

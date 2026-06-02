@@ -74,3 +74,4 @@ Dockerfile  text eol=lf
 # git-crypt encrypted directories
 books/**  filter=git-crypt diff=git-crypt
 config/** filter=git-crypt diff=git-crypt
+reindex_all.sh filter=git-crypt diff=git-crypt
