@@ -13,6 +13,10 @@ appsettings.Local.json
 *.env
 .env
 
+## git-crypt symmetric key — NEVER commit this (it decrypts every encrypted file)
+aiassitantkey
+*.git-crypt-key
+
 ## Database
 *.db
 *.db-shm
