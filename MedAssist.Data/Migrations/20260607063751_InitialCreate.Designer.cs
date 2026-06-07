@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MedAssist.Data.Migrations
 {
     [DbContext(typeof(MedAssistDbContext))]
-    [Migration("20260520041414_AddBookOutline")]
-    partial class AddBookOutline
+    [Migration("20260607063751_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -152,6 +152,52 @@ namespace MedAssist.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("books", (string)null);
+                });
+
+            modelBuilder.Entity("MedAssist.Data.Entities.ChatMessageEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("QueryType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("query_type");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("role");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "QueryType", "CreatedAt")
+                        .HasDatabaseName("ix_chat_messages_user_querytype_created");
+
+                    b.ToTable("chat_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_chat_messages_query_type", "query_type IN ('disease', 'symptoms', 'treatment', 'globalsearch', 'differentialdiagnosis')");
+
+                            t.HasCheckConstraint("ck_chat_messages_role", "role IN ('user', 'assistant')");
+                        });
                 });
 
             modelBuilder.Entity("MedAssist.Data.Entities.IllnessAliasEntity", b =>

@@ -1,4 +1,9 @@
-use_default_settings: true
+use_default_settings:
+  engines:
+    keep_only:
+      - google
+      - duckduckgo
+      - bing
 
 general:
   instance_name: "MedAssist Search"
@@ -40,23 +45,3 @@ engines:
     engine: bing
     categories: general
     disabled: false
-
-  # Disable everything else — domain filtering in the query handles scope
-  - name: pubmed
-    disabled: true
-
-  - name: semantic scholar
-    disabled: true
-
-  - name: wikipedia
-    disabled: true
-
-  - name: wikidata
-    disabled: true
-
-  - name: arxiv
-    disabled: true
-
-categories_as_tabs:
-  general:
-    name: General
