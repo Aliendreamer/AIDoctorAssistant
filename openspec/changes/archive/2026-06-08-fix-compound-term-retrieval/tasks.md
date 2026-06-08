@@ -12,5 +12,5 @@
 ## 3. Verification
 
 - [x] 3.1 Run all tests — `dotnet test`
-- [ ] 3.2 Manual smoke test: query "Арнолд-Киари малформация" in the UI — verify result is about cerebellar herniation, not tonsillectomy
-- [ ] 3.3 Manual smoke test: query "тонзилит" — verify tonsil content still returned correctly
+- [x] 3.2 Manual smoke test: query "Арнолд-Киари малформация" in the UI — verify result is about cerebellar herniation, not tonsillectomy
+- [x] 3.3 Manual smoke test: query "тонзилит" — verify tonsil content still returned correctly

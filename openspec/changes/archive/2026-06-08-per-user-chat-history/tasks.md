@@ -39,6 +39,6 @@
 
 - [x] 6.1 Run `dotnet test` — all tests pass
 - [x] 6.2 Rebuild and restart web container: `docker compose up -d --build web`
-- [ ] 6.3 Manual test: submit two related queries — second answer references first
-- [ ] 6.4 Manual test: clear history — thread disappears, next query has no prior context
-- [ ] 6.5 Manual test: switch query type — history does not carry over between types
+- [x] 6.3 Manual test: submit two related queries — second answer references first
+- [x] 6.4 Manual test: clear history — thread disappears, next query has no prior context
+- [x] 6.5 Manual test: switch query type — history does not carry over between types

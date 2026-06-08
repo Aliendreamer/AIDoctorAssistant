@@ -26,8 +26,8 @@
 
 ## 5. Validation
 
-- [ ] 5.1 Build and start `marker` container, verify `/health` returns `models_loaded: true`
-- [ ] 5.2 Trigger indexing on 2–3 books with known Cyrillic artifacts
-- [ ] 5.3 Compare extracted markdown — check for absence of Portuguese diacritics in Cyrillic text
-- [ ] 5.4 Run Bulgarian queries, compare retrieval scores against pre-swap baseline
-- [ ] 5.5 If quality confirmed: delete cached `.md` files and re-index full corpus
+- [x] 5.1 Build and start `marker` container, verify `/health` returns `models_loaded: true`
+- [x] 5.2 Trigger indexing on 2–3 books with known Cyrillic artifacts
+- [x] 5.3 Compare extracted markdown — check for absence of Portuguese diacritics in Cyrillic text
+- [x] 5.4 Run Bulgarian queries, compare retrieval scores against pre-swap baseline
+- [x] 5.5 If quality confirmed: delete cached `.md` files and re-index full corpus

@@ -19,10 +19,10 @@
 - [x] Update `PollStatusAsync_RetriesOnTransientHttpError` to use `save_path` in mock response
 
 ### Infrastructure
-- [ ] Rebuild and restart marker container
-- [ ] Rebuild and restart web container
-- [ ] Trigger `POST /api/admin/books/extract/all` to re-extract all books without .md files
+- [x] Rebuild and restart marker container
+- [x] Rebuild and restart web container
+- [x] Trigger `POST /api/admin/books/extract/all` to re-extract all books without .md files
 
 ### Verification
-- [ ] Verify bulk extraction creates .md files on disk for all books
-- [ ] Verify book 4 and book 5 re-extract successfully
+- [x] Verify bulk extraction creates .md files on disk for all books
+- [x] Verify book 4 and book 5 re-extract successfully

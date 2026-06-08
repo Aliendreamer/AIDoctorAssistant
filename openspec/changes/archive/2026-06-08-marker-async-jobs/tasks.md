@@ -23,6 +23,6 @@
 ## 5. Validation
 
 - [x] 5.1 Rebuild marker and web containers
-- [ ] 5.2 Submit extract request, verify 202 returned immediately and `GET /extract/status` shows `Running`
-- [ ] 5.3 Poll `GET /extract/status` until `Done`; verify `.md` file written to disk
-- [ ] 5.4 Submit two extract requests back-to-back, verify second queues behind first (check Python logs)
+- [x] 5.2 Submit extract request, verify 202 returned immediately and `GET /extract/status` shows `Running`
+- [x] 5.3 Poll `GET /extract/status` until `Done`; verify `.md` file written to disk
+- [x] 5.4 Submit two extract requests back-to-back, verify second queues behind first (check Python logs)
