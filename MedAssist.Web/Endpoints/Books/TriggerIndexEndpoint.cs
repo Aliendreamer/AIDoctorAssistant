@@ -41,7 +41,19 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
         var bookRepo = scope.ServiceProvider.GetRequiredService<BookRepository>();
         var book = await bookRepo.GetByIdAsync(id, ct);
 
-        if (book is null || !File.Exists(book.FilePath))
+        if (book is null)
+        {
+            await Send.NotFoundAsync(ct);
+            return;
+        }
+
+        var mdBasePath = _configuration["Books:MdPath"] ?? "/books/mdfiles";
+        var cachedMarkdownPath = Path.Combine(mdBasePath, $"{book.BookId}.md");
+        var hasCachedMarkdown = File.Exists(cachedMarkdownPath);
+
+        // Indexing needs either cached markdown (skip Marker) or the source PDF (to OCR).
+        // After a DB wipe the PDFs may be gone while the markdown cache survives — that's fine.
+        if (!hasCachedMarkdown && !File.Exists(book.FilePath))
         {
             await Send.NotFoundAsync(ct);
             return;
@@ -70,7 +82,6 @@ public sealed class TriggerIndexEndpoint : EndpointWithoutRequest
 
         var pdfPath = book.FilePath;
         var bookId = book.BookId;
-        var mdBasePath = _configuration["Books:MdPath"] ?? "/books/mdfiles";
 
         _ = Task.Run(async () =>
         {

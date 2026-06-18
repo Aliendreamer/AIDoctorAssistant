@@ -8,8 +8,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Install torch first so marker-pdf's resolver doesn't replace it
-ARG TORCH_INDEX=https://download.pytorch.org/whl/nightly/cu128
+# Install torch first so marker-pdf's resolver doesn't replace it.
+# Stable cu128 (not nightly): torch/torchvision ship as a matched set here, avoiding the
+# nightly date-mismatch resolver conflict. cu128 supports Blackwell (RTX 50xx).
+ARG TORCH_INDEX=https://download.pytorch.org/whl/cu128
 RUN pip install --no-cache-dir torch torchvision --index-url ${TORCH_INDEX}
 
 RUN pip install --no-cache-dir \

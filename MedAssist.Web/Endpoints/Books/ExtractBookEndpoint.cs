@@ -70,7 +70,9 @@ public sealed class ExtractBookEndpoint : EndpointWithoutRequest
                 var savePath = await marker.PollStatusAsync(jobId);
 
                 if (!File.Exists(savePath))
+                {
                     throw new InvalidOperationException($"Marker reported done but file not found: {savePath}");
+                }
 
                 _tracker.MarkDone(id);
                 _logger.LogInformation("Marker extraction done for {BookId}, saved to {Path}", bookId, savePath);

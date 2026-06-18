@@ -10,35 +10,19 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:8080
-      - VectorStore__Qdrant__Endpoint=http://qdrant:6334
-      - AI__ModelProvider=ollama
-      - AI__Ollama__Endpoint=http://ollama:11434
-      - AI__Ollama__ModelName=gemma2:9b
-      - Database__ConnectionString=Host=postgres;Database=medassist;Username=medassist;Password=medassist
-      - Models__Path=/models
-      - Marker__Endpoint=http://marker:5002
-      - OpenTelemetry__Endpoint=http://otel-collector:4317
-      - OpenTelemetry__ServiceName=medassist-web
-      - WebSearch__Endpoint=http://searxng:8080
-      - Books__PdfPath=/books/uniquebooks
-      - Books__MdPath=/books/mdfiles
+      # All other app config (DB, Ollama, Qdrant, SearXNG, OTEL, Marker, Books, Models)
+      # lives in config/appsettings.shared.json, which is loaded *after* env vars and
+      # therefore overrides them — so set those values there, not here.
     volumes:
       - medassist-models:/models
       - ./books/uniquebooks:/books/uniquebooks
       - ./books/mdFiles:/books/mdfiles
     depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
-      ollama:
-        condition: service_started
-      otel-collector:
-        condition: service_started
       marker:
         condition: service_healthy
     networks:
       - medassist-net
+      - pcc-net
 
   marker:
     build:
@@ -75,151 +59,22 @@ services:
               capabilities: [gpu]
     networks:
       - medassist-net
+      - pcc-net
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@medassist.com
-      - PGADMIN_DEFAULT_PASSWORD=medassist
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin-data:/var/lib/pgadmin
-    networks:
-      - medassist-net
-
-  postgres:
-    image: postgres:17-alpine
-    environment:
-      - POSTGRES_DB=medassist
-      - POSTGRES_USER=medassist
-      - POSTGRES_PASSWORD=medassist
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U medassist -d medassist"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - medassist-net
-
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333" # REST API + healthcheck
-      - "6334:6334" # gRPC (used by QdrantClient)
-    volumes:
-      - qdrant-data:/qdrant/storage
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "bash -c 'echo > /dev/tcp/localhost/6333 && echo > /dev/tcp/localhost/6334' 2>/dev/null || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - medassist-net
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    networks:
-      - medassist-net
-
-  searxng:
-    image: searxng/searxng:latest
-    ports:
-      - "8081:8080"
-    volumes:
-      - ./docker/searxng/settings.yml:/etc/searxng/settings.yml:ro
-    environment:
-      - SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
-    restart: unless-stopped
-    networks:
-      - medassist-net
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    ports:
-      - "4317:4317" # OTLP gRPC
-      - "4318:4318" # OTLP HTTP
-      - "8888:8888" # Prometheus metrics (self-observability)
-      - "13133:13133" # Health check
-    volumes:
-      - ./docker/otel-collector/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    depends_on:
-      - tempo
-    networks:
-      - medassist-net
-
-  tempo:
-    image: grafana/tempo:latest
-    ports:
-      - "3200:3200" # HTTP API + query frontend
-      - "9095:9095" # gRPC
-    volumes:
-      - ./docker/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
-      - tempo-data:/var/tempo
-    command: ["-config.file=/etc/tempo.yaml"]
-    networks:
-      - medassist-net
-
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.enable-remote-write-receiver"
-    networks:
-      - medassist-net
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=medassist
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    depends_on:
-      - prometheus
-      - tempo
-    networks:
-      - medassist-net
+  # Shared infra is provided by the PersonalCommandCenter stack
+  # (personalcommandcenter_default network), reached here by container name:
+  #   postgres:5432, qdrant:6334 (gRPC), ollama:11434, searxng:8080,
+  #   otel-collector:4317 (OTLP gRPC).
+  # The observability backends (tempo/prometheus/grafana) and pgAdmin live in
+  # the shared PCC stack too — aidoctor only runs the .NET app + marker.
 
 volumes:
-  postgres-data:
-  pgadmin-data:
-  qdrant-data:
-  ollama-models:
-  prometheus-data:
-  grafana-data:
-  tempo-data:
   medassist-models:
   marker-models:
 
 networks:
   medassist-net:
     driver: bridge
+  pcc-net:
+    external: true
+    name: personalcommandcenter_default
