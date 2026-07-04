@@ -95,11 +95,14 @@ public sealed partial class QueryService
 
             if (userId is not null)
             {
+                // Both rows share the real timestamp; their relative order (user before assistant) is
+                // resolved deterministically by the monotonic identity Id, not a fudged microsecond
+                // offset (audit P3-8).
                 var now = DateTimeOffset.UtcNow;
                 await _chatHistory.AddMessagesAsync(
                 [
                     new() { UserId = userId, QueryType = queryTypeKey, Role = "user", Content = query, CreatedAt = now },
-                    new() { UserId = userId, QueryType = queryTypeKey, Role = "assistant", Content = result.Answer, CreatedAt = now.AddMicroseconds(1) }
+                    new() { UserId = userId, QueryType = queryTypeKey, Role = "assistant", Content = result.Answer, CreatedAt = now }
                 ], cancellationToken);
             }
 

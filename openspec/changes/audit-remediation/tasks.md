@@ -138,7 +138,7 @@ and run only with explicit approval.
 - [ ] Move data logic out of `Query.razor`; replace `JS eval` (P2-15) — **remaining (browser-gated)**
 - [ ] Extract `RagPluginBase` collaborators (P2-16) — **remaining (large refactor)**; behavior-preserving split best verified against the pipeline
 - [x] Batch `ExpandQueryAsync` into a single `IN (...)` query instead of one round-trip per term (P2-17). (Cross-request memoization deferred — the vocab cache already removed the bigger per-query load.)
-- [ ] `lower(name_en/bg)` expression indexes + `pg_trgm` GIN — **remaining (migration-gated)**; needs real Postgres to apply/verify (P2-18)
+- [x] `lower(name_en/bg)` expression indexes + `pg_trgm` GIN (P2-18) — migration `AddDictionaryTrigramIndexes` (raw SQL, kept out of the model so the snapshot/SQLite tests are unaffected): `CREATE EXTENSION pg_trgm`; b-tree expression indexes on `lower(name_en)`/`lower(name_bg)`/`lower(alias)` for `ExpandQueryAsync`'s equality `IN`; GIN trigram indexes on `lower(name_en)`/`lower(name_bg)` for `SearchAsync`'s `LIKE '%q%'`. [~] EXPLAIN-verification of plan usage still needs live Postgres
 - [x] Single `SaveChanges` for chat-history pair (`AddMessagesAsync`) (P2-19)
 - [ ] Tune ONNX `IntraOpNumThreads` — **deferred (needs profiling)**; setting it blind risks regressing single-query latency (P2-20)
 - [ ] Rename/relocate `qdrant_results_total` — **deferred**; the name is referenced by the ported Grafana dashboard, so renaming without updating it there would break the panel (P2-21)
@@ -154,7 +154,7 @@ and run only with explicit approval.
 - [ ] Logout → POST — **skipped**: would need a UI form change I can't browser-verify; forced-logout CSRF is negligible on the trusted network (P3-5)
 - [x] `[GeneratedRegex]` for `StripMarkdown` (class made `partial`, 5 source-gen regexes) (P3-6)
 - [ ] Marker polling backoff — **skipped**: low value; P2-4 already bounds total poll time (P3-7)
-- [ ] Chat-history sequence column — **remaining (migration-gated)**; interim `AddMicroseconds` ordering still works (P3-8)
+- [x] Chat-history deterministic ordering (P3-8) — resolved **without** a new column: the identity `Id` is already the monotonic insertion sequence, so `GetRecentAsync` now tie-breaks equal `CreatedAt` by `Id` (`ThenBy(m => m.Id)`), and `QueryService` no longer fudges the assistant row's timestamp with `AddMicroseconds(1)` (both rows share the true `now`). Code-only, no migration. 165 tests pass, build 0/0
 - [x] Shared `\p{L}+` tokenizer pattern via `TokenizationConstants.WordPattern` (index/query symmetry); web-context building already deduped in P2-3 (P3-9)
 - [x] README PCC split-stack topology updated earlier this effort; seed/reindex scripts already reference the PCC Postgres (P3-10)
 
