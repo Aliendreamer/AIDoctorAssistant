@@ -24,6 +24,52 @@ namespace MedAssist.Data.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "book_status", new[] { "failed", "in_progress", "indexed", "pending" });
             NpgsqlModelBuilderExtensions.UseIdentityAlwaysColumns(modelBuilder);
 
+            modelBuilder.Entity("MedAssist.Data.Entities.Bm25BookStatsEntity", b =>
+                {
+                    b.Property<string>("BookId")
+                        .HasColumnType("text")
+                        .HasColumnName("book_id");
+
+                    b.Property<int>("ChunkCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("chunk_count");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("BookId");
+
+                    b.ToTable("bm25_book_stats", (string)null);
+                });
+
+            modelBuilder.Entity("MedAssist.Data.Entities.Bm25BookTermEntity", b =>
+                {
+                    b.Property<string>("BookId")
+                        .HasColumnType("text")
+                        .HasColumnName("book_id");
+
+                    b.Property<string>("Term")
+                        .HasColumnType("text")
+                        .HasColumnName("term");
+
+                    b.Property<int>("DocumentFrequency")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("document_frequency");
+
+                    b.HasKey("BookId", "Term");
+
+                    b.HasIndex("BookId");
+
+                    b.ToTable("bm25_book_terms", (string)null);
+                });
+
             modelBuilder.Entity("MedAssist.Data.Entities.Bm25StatsEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -195,6 +241,40 @@ namespace MedAssist.Data.Migrations
 
                             t.HasCheckConstraint("ck_chat_messages_role", "role IN ('user', 'assistant')");
                         });
+                });
+
+            modelBuilder.Entity("MedAssist.Data.Entities.ExtractionStatusEntity", b =>
+                {
+                    b.Property<int>("BookDbId")
+                        .HasColumnType("integer")
+                        .HasColumnName("book_db_id");
+
+                    b.Property<string>("BookSlug")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("book_slug");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text")
+                        .HasColumnName("error");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("state");
+
+                    b.HasKey("BookDbId");
+
+                    b.ToTable("extraction_status", (string)null);
                 });
 
             modelBuilder.Entity("MedAssist.Data.Entities.IllnessAliasEntity", b =>

@@ -1,4 +1,6 @@
+using System.Diagnostics.Metrics;
 using System.Text.RegularExpressions;
+using MedAssist.AI.Dictionary;
 using MedAssist.Data.Repositories;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
@@ -8,6 +10,10 @@ namespace MedAssist.AI.Ingestion;
 
 public sealed class BookIndexer
 {
+    private static readonly Meter _meter = new("MedAssist.AI");
+    private static readonly Counter<long> _chunksIndexed = _meter.CreateCounter<long>(
+        "indexer_chunks_total", description: "Total chunks indexed across all books");
+
     private readonly IVectorStore _vectorStore;
     private readonly IEmbedder _embedder;
     private readonly ISparseVectorizer _sparseVectorizer;
@@ -16,6 +22,7 @@ public sealed class BookIndexer
     private readonly BookRepository _bookRepo;
     private readonly CheckpointRepository _checkpointRepo;
     private readonly VocabularyBuilder _vocabBuilder;
+    private readonly Bm25VocabCache _vocabCache;
     private readonly ILogger<BookIndexer> _logger;
     private const int _checkpointInterval = 50;
 
@@ -28,6 +35,7 @@ public sealed class BookIndexer
         BookRepository bookRepo,
         CheckpointRepository checkpointRepo,
         VocabularyBuilder vocabBuilder,
+        Bm25VocabCache vocabCache,
         ILogger<BookIndexer> logger)
     {
         _vectorStore = vectorStore;
@@ -38,6 +46,7 @@ public sealed class BookIndexer
         _bookRepo = bookRepo;
         _checkpointRepo = checkpointRepo;
         _vocabBuilder = vocabBuilder;
+        _vocabCache = vocabCache;
         _logger = logger;
     }
 
@@ -69,8 +78,25 @@ public sealed class BookIndexer
             Status = BookStatus.InProgress
         }, cancellationToken);
 
+        // Pass A — build the book's BM25 vocabulary over ALL chunks and refresh the snapshot BEFORE
+        // any sparse vector is produced (audit P1-5). Without this, the first book on a fresh corpus
+        // would be stored with empty sparse vectors. Runs over every chunk on each attempt; the
+        // contribution is applied as a delta, so re-running on resume is an idempotent no-op.
+        foreach (var (_, text, _) in allChunks)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _vocabBuilder.AddChunk(text);
+        }
+
+        await _vocabBuilder.FlushAsync(bookId, cancellationToken);
+        // The vocabulary changed — drop the cached snapshot so Pass B's sparse vectors (and later
+        // queries) see the new terms (P1-9).
+        _vocabCache.Invalidate();
+
         var indexed = checkpoint?.IndexedChunks ?? 0;
 
+        // Pass B — embed (dense) + vectorize (sparse, now non-empty) + upsert, resumable from the
+        // checkpoint.
         for (var i = resumeFromIndex; i < allChunks.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -97,7 +123,7 @@ public sealed class BookIndexer
             var denseVector = await _embedder.EmbedPassageAsync(text, cancellationToken);
             var sparseVector = await _sparseVectorizer.VectorizePassageAsync(text, cancellationToken);
             await _vectorStore.UpsertAsync(chunk, denseVector, sparseVector, cancellationToken);
-            _vocabBuilder.AddChunk(text);
+            _chunksIndexed.Add(1);
             indexed++;
 
             if (indexed % _checkpointInterval == 0)
@@ -112,7 +138,6 @@ public sealed class BookIndexer
             bookId, allChunks.Count, allChunks.Count, allChunks.Count - 1, BookStatus.Indexed, DateTimeOffset.UtcNow), cancellationToken);
 
         await IndexSectionSummariesAsync(allChunks, bookId, title, author, language, cancellationToken);
-        await _vocabBuilder.FlushAsync(cancellationToken);
 
         var outline = ExtractOutline(markdownText);
         await _bookRepo.UpdateOutlineAsync(bookId, outline, cancellationToken);

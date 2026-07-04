@@ -1,45 +1,42 @@
 # private-field-naming Specification
 
 ## Purpose
-TBD - created by archiving change fix-private-field-naming. Update Purpose after archive.
+Enforce one consistent private-field naming convention across the solution via `.editorconfig`, and
+provide the language display-name constants used by language parsing. Corrected to match the current
+`.editorconfig`, which applies `_camelCase` to **all** private fields including `const` (the earlier
+"private const uses PascalCase" rule was removed).
+
 ## Requirements
-### Requirement: Private const fields use PascalCase without underscore prefix
-The `.editorconfig` SHALL define a naming rule for `private const` fields that requires PascalCase capitalization and no required prefix, taking precedence over the general private-field `_camelCase` rule.
 
-#### Scenario: Constant field exempted from underscore rule
-- **WHEN** a `private const` field is declared with PascalCase (e.g., `MaxTokens`, `HfBase`)
-- **THEN** `dotnet format --diagnostics IDE1006` SHALL report no violation for that field
+### Requirement: All private fields use _camelCase (including const)
+The `.editorconfig` SHALL define a single naming rule applying to every `private` field —
+instance, `static readonly`, and `const` alike — requiring a leading underscore and camelCase
+(`_camelCase`). There SHALL be no separate PascalCase rule for `private const`.
 
-#### Scenario: Non-constant private field still requires underscore
-- **WHEN** a `private readonly` or `private static readonly` field is declared without `_` prefix
-- **THEN** `dotnet format --diagnostics IDE1006` SHALL report an IDE1006 violation
+#### Scenario: Private const field uses _camelCase
+- **WHEN** a `private const` field is declared (e.g. `_checkpointInterval` in `BookIndexer`, `_k1` in `SparseVectorizer`)
+- **THEN** it SHALL be named `_camelCase` and `dotnet build` SHALL report no naming warning
 
-### Requirement: Private static readonly fields use _camelCase
-All `private static readonly` fields in the solution SHALL be named with a leading `_` and camelCase (e.g., `_modelFiles`, `_meter`).
+#### Scenario: Private static readonly field uses _camelCase
+- **WHEN** a `private static readonly` field is declared (e.g. `_meter`)
+- **THEN** it SHALL be named `_camelCase`
 
-#### Scenario: Static readonly field renamed with _ prefix
-- **WHEN** a previously non-prefixed `private static readonly` field is renamed to `_camelCase`
-- **THEN** all usages within the declaring class compile without error
-- **THEN** `dotnet build` reports 0 errors and 0 warnings
+#### Scenario: Non-prefixed private field is flagged
+- **WHEN** a `private` field is declared without a leading underscore
+- **THEN** the `.editorconfig` naming rule SHALL report a violation (an error under `TreatWarningsAsErrors`)
 
-### Requirement: Zero IDE1006 violations solution-wide
-Running `dotnet format --verify-no-changes --diagnostics IDE1006` on the full solution SHALL exit with code 0.
+### Requirement: Solution builds clean under the naming rule
+The solution SHALL build with 0 warnings and 0 errors. Because `TreatWarningsAsErrors` is enabled, any naming-rule violation fails the build, so a green build is proof of solution-wide compliance.
 
-#### Scenario: Clean format check
-- **WHEN** `dotnet format MedAssist.slnx --verify-no-changes --diagnostics IDE1006` is executed
-- **THEN** exit code is 0 and no IDE1006 errors are printed
-
-### Requirement: Zero whitespace format violations
-Running `dotnet format --verify-no-changes` (without `--diagnostics` filter) SHALL report no WHITESPACE errors in `ChunkEnricher.cs`, `IllnessDictionaryRepository.cs`, or `QueryService.cs`.
-
-#### Scenario: Whitespace violations resolved
-- **WHEN** `dotnet format MedAssist.slnx --verify-no-changes` is executed
-- **THEN** no WHITESPACE errors appear for the three previously-affected files
+#### Scenario: Clean build
+- **WHEN** `dotnet build MedAssist.slnx` is executed
+- **THEN** it SHALL report 0 warnings and 0 errors
 
 ### Requirement: LanguageCodes exposes display-name constants
-`MedAssist.Shared.Constants.LanguageCodes` SHALL add `EnglishName` (`"english"`) and `BulgarianName` (`"bulgarian"`) alongside the existing short-code constants `English` (`"en"`) and `Bulgarian` (`"bg"`).
+`MedAssist.Shared.Constants.LanguageCodes` SHALL expose `EnglishName` (`"english"`) and
+`BulgarianName` (`"bulgarian"`) alongside the short-code constants `English` (`"en"`) and
+`Bulgarian` (`"bg"`).
 
-#### Scenario: RagPluginBase switch arms use display-name constants
+#### Scenario: RagPluginBase language parsing uses the constants
 - **WHEN** `RagPluginBase.ParseLanguage` evaluates a language string
-- **THEN** the `"english"` and `"bulgarian"` switch arms SHALL reference `LanguageCodes.EnglishName` and `LanguageCodes.BulgarianName` respectively
-
+- **THEN** the english/bulgarian arms SHALL reference `LanguageCodes.EnglishName`/`LanguageCodes.BulgarianName` (alongside the short codes `English`/`Bulgarian`)

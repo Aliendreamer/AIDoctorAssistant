@@ -1,4 +1,5 @@
 using FastEndpoints;
+using MedAssist.Shared.Models;
 using MedAssist.Web.Services;
 
 namespace MedAssist.Web.Endpoints.Books;
@@ -27,28 +28,27 @@ public sealed class ExtractionStatusEndpoint : EndpointWithoutRequest
                 return;
             }
 
-            var entry = _tracker.Get(id);
+            var entry = await _tracker.GetAsync(id, ct);
             if (entry is null)
             {
                 await Send.ResponseAsync(new { message = $"No extraction record for book id {id}." }, 404, ct);
                 return;
             }
 
-            await Send.OkAsync(MapEntry(id, entry), ct);
+            await Send.OkAsync(MapEntry(entry), ct);
             return;
         }
 
-        var all = _tracker.GetAll()
-            .OrderBy(kv => kv.Value.StartedAt)
-            .Select(kv => MapEntry(kv.Key, kv.Value))
+        var all = (await _tracker.GetAllAsync(ct))
+            .Select(MapEntry)
             .ToList();
 
         await Send.OkAsync(all, ct);
     }
 
-    private static object MapEntry(int id, ExtractionEntry e) => new
+    private static object MapEntry(ExtractionEntry e) => new
     {
-        bookDbId = id,
+        bookDbId = e.BookDbId,
         bookId = e.BookId,
         state = e.State.ToString(),
         startedAt = e.StartedAt,

@@ -29,6 +29,8 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 var app = builder.Build();
 
+app.ValidateJwtSigningKey();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

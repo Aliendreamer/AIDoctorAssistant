@@ -1,6 +1,5 @@
 using FastEndpoints;
-using MedAssist.Web.Data;
-using Microsoft.EntityFrameworkCore;
+using MedAssist.Web.Services;
 
 namespace MedAssist.Web.Endpoints.Users;
 
@@ -13,9 +12,9 @@ public sealed class CreateUserRequest
 
 public sealed class CreateUserEndpoint : Endpoint<CreateUserRequest>
 {
-    private readonly UserRepository _users;
+    private readonly UserApplicationService _users;
 
-    public CreateUserEndpoint(UserRepository users) => _users = users;
+    public CreateUserEndpoint(UserApplicationService users) => _users = users;
 
     public override void Configure()
     {
@@ -25,27 +24,20 @@ public sealed class CreateUserEndpoint : Endpoint<CreateUserRequest>
 
     public override async Task HandleAsync(CreateUserRequest req, CancellationToken ct)
     {
-        if (req.Password.Length < 8)
+        var result = await _users.CreateAsync(req.Username, req.Role, req.Password, ct);
+        switch (result.Outcome)
         {
-            await Send.ResponseAsync("Password must be at least 8 characters.", 400, ct);
-            return;
-        }
-
-        if (req.Role is not "Admin" and not "Doctor")
-        {
-            await Send.ResponseAsync("Role must be Admin or Doctor.", 400, ct);
-            return;
-        }
-
-        try
-        {
-            var user = await _users.CreateAsync(req.Username, req.Role, req.Password, ct);
-            var dto = new UserDto(user.Id, user.Username, user.Role, user.CreatedAt);
-            await Send.ResponseAsync(dto, 201, ct);
-        }
-        catch (DbUpdateException)
-        {
-            await Send.ResponseAsync("A user with that username already exists.", 409, ct);
+            case CreateUserOutcome.Created:
+                var user = result.User!;
+                await Send.ResponseAsync(new UserDto(user.Id, user.Username, user.Role, user.CreatedAt), 201, ct);
+                break;
+            case CreateUserOutcome.WeakPassword:
+            case CreateUserOutcome.InvalidRole:
+                await Send.ResponseAsync(result.Message, 400, ct);
+                break;
+            case CreateUserOutcome.DuplicateUsername:
+                await Send.ResponseAsync(result.Message, 409, ct);
+                break;
         }
     }
 }

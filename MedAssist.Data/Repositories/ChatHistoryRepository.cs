@@ -22,6 +22,13 @@ public sealed class ChatHistoryRepository(MedAssistDbContext db)
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Persists several messages in a single round-trip (audit P2-19).</summary>
+    public async Task AddMessagesAsync(IEnumerable<ChatMessageEntity> messages, CancellationToken ct = default)
+    {
+        db.ChatMessages.AddRange(messages);
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task ClearAsync(string userId, string queryType, CancellationToken ct = default)
     {
         await db.ChatMessages

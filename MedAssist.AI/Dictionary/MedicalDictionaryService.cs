@@ -21,26 +21,24 @@ public sealed class MedicalDictionaryService(MedAssistDbContext medAssistDbConte
             terms.Add(word);
         }
 
-        // Expand any term via dictionary if entries exist
-        foreach (var term in terms.ToList())
-        {
-            var termLower = term.ToLowerInvariant();
-            var illnesses = await _medAssistDbContext.Illnesses
-                .Include(i => i.Aliases)
-                .Where(i =>
-                    i.NameEn.ToLower() == termLower ||
-                    i.NameBg.ToLower() == termLower ||
-                    i.Aliases.Any(a => a.Alias.ToLower() == termLower))
-                .ToListAsync(cancellationToken);
+        // Expand all terms against the dictionary in ONE query instead of one round-trip per term
+        // (audit P2-17). Contains(...) translates to a SQL IN (...).
+        var termLowers = terms.Select(t => t.ToLowerInvariant()).ToHashSet();
+        var matches = await _medAssistDbContext.Illnesses
+            .Include(i => i.Aliases)
+            .Where(i =>
+                termLowers.Contains(i.NameEn.ToLower()) ||
+                termLowers.Contains(i.NameBg.ToLower()) ||
+                i.Aliases.Any(a => termLowers.Contains(a.Alias.ToLower())))
+            .ToListAsync(cancellationToken);
 
-            foreach (var illness in illnesses)
+        foreach (var illness in matches)
+        {
+            terms.Add(illness.NameEn);
+            terms.Add(illness.NameBg);
+            foreach (var alias in illness.Aliases)
             {
-                terms.Add(illness.NameEn);
-                terms.Add(illness.NameBg);
-                foreach (var alias in illness.Aliases)
-                {
-                    terms.Add(alias.Alias);
-                }
+                terms.Add(alias.Alias);
             }
         }
 
@@ -66,7 +64,7 @@ public sealed class MedicalDictionaryService(MedAssistDbContext medAssistDbConte
 
         var illness = await _medAssistDbContext.Illnesses
             .Include(i => i.Aliases)
-            .FirstOrDefaultAsync(i => i.IcdCode.Equals(icdUpper, StringComparison.CurrentCultureIgnoreCase), cancellationToken);
+            .FirstOrDefaultAsync(i => i.IcdCode.ToUpper() == icdUpper, cancellationToken);
 
         return illness is null ? null : MapToEntry(illness);
     }

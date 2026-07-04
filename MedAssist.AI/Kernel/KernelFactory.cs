@@ -15,6 +15,7 @@ public static class KernelFactory
 
     public static Microsoft.SemanticKernel.Kernel Build(
         IConfiguration configuration,
+        HttpClient ollamaHttpClient,
         IMedicalDictionary dictionary,
         IVectorStore vectorStore,
         IEmbedder embedder,
@@ -30,13 +31,13 @@ public static class KernelFactory
 
         if (provider.Equals("ollama", StringComparison.OrdinalIgnoreCase))
         {
-            var endpoint = configuration["AI:Ollama:Endpoint"]
-                ?? throw new InvalidOperationException("AI:Ollama:Endpoint configuration is required.");
             var modelName = configuration["AI:Ollama:ModelName"]
                 ?? throw new InvalidOperationException("AI:Ollama:ModelName configuration is required.");
 
+            // The endpoint + a bounded timeout come from the DI-configured "ollama" HttpClient
+            // (previously this used a default HttpClient with no timeout — a hung Ollama blocked forever).
 #pragma warning disable SKEXP0070
-            builder.AddOllamaChatCompletion(modelName, new Uri(endpoint));
+            builder.AddOllamaChatCompletion(modelName, ollamaHttpClient);
 #pragma warning restore SKEXP0070
         }
         else

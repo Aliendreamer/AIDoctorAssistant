@@ -90,6 +90,28 @@ git-crypt unlock
 
 ---
 
+## Shared infrastructure (PersonalCommandCenter)
+
+MedAssist does **not** run its own database, vector store, LLM, metasearch, or observability
+stack. Those are provided by the sibling **PersonalCommandCenter (PCC)** stack, and this repo's
+`docker-compose.yml` only builds two services: **`web`** (the app) and **`marker`** (GPU OCR).
+
+The app reaches the shared services by container name over the external
+`personalcommandcenter_default` Docker network (declared here as `pcc-net`):
+
+| Shared service | Reached as | Provided by |
+| --- | --- | --- |
+| PostgreSQL | `postgres:5432` | PCC |
+| Qdrant (gRPC) | `qdrant:6334` | PCC |
+| Ollama | `ollama:11434` | PCC |
+| SearXNG | `searxng:8080` | PCC |
+| OTEL collector | `otel-collector:4317` | PCC |
+
+> **Ordering matters.** `pcc-net` is an *external* network, so the PCC stack must be started
+> **before** MedAssist — otherwise `docker compose up` fails because the network doesn't exist yet.
+> The app also can't `depends_on` cross-stack services, so PCC must be healthy before the app runs.
+> The `medassist` database is created automatically on first run by EF Core migrations.
+
 ## Quick start (Docker)
 
 ```bash
@@ -97,27 +119,35 @@ git-crypt unlock
 git clone <repo-url> && cd AIDoctorAssistant
 git-crypt unlock /path/to/medassist.key
 
-# 2. Start all services
+# 2. Start the shared PCC stack FIRST (separate repo)
+cd ../PersonalCommandCenter && docker compose up -d && cd -
+
+# 3. Pull the LLM into the shared Ollama (runs in the PCC stack)
+docker exec -it $(docker ps -qf name=ollama) ollama pull gemma2:9b
+
+# 4. Start MedAssist (web + marker)
 docker compose up -d
 
-# 3. Pull the LLM into Ollama
-docker exec -it $(docker compose ps -q ollama) ollama pull gemma2:9b
-
-# 4. Open the web app
+# 5. Open the web app
 open http://localhost:8080
 ```
 
 ### Service URLs
 
-| Service | URL | Credentials |
+MedAssist publishes only the web app and the Marker OCR service. Everything else (Grafana,
+Prometheus, pgAdmin, Qdrant REST, SearXNG UI) is owned by PCC and reached via its Traefik
+router at `*.pcc.localhost`.
+
+| Service | URL | Owned by |
 | --- | --- | --- |
-| Web app | <http://localhost:8080> | see UI section below |
-| Scalar API docs | <http://localhost:8080/scalar/v1> | — |
-| pgAdmin | <http://localhost:5050> | `admin@medassist.com` / `medassist` |
-| Grafana | <http://localhost:3000> | `admin` / `medassist` |
-| Prometheus | <http://localhost:9090> | — |
-| Qdrant REST | <http://localhost:6333> | — |
-| Marker | <http://localhost:5002/docs> | — |
+| Web app | <http://localhost:8080> | MedAssist |
+| Scalar API docs | <http://localhost:8080/scalar/v1> | MedAssist |
+| Marker | <http://localhost:5002/docs> | MedAssist |
+| Grafana | <http://grafana.pcc.localhost> | PCC |
+| Prometheus | <http://prometheus.pcc.localhost> | PCC |
+| pgAdmin | <http://pgadmin.pcc.localhost> | PCC |
+| Qdrant REST | <http://qdrant.pcc.localhost> | PCC |
+| SearXNG | <http://searxng.pcc.localhost> | PCC |
 
 ---
 
@@ -220,13 +250,22 @@ Indexing is **resumable**: if interrupted, re-triggering picks up from the last 
 
 ## Local development
 
-```bash
-# Start infrastructure only
-docker compose up postgres qdrant ollama marker -d
+The default dev flow is fully containerized — the app joins the shared network and reaches
+the PCC services by container name:
 
-# Run the web app
-dotnet run --project MedAssist.Web
+```bash
+# 1. Start the shared infra (PCC stack: postgres, qdrant, ollama, searxng, otel-collector)
+cd ../PersonalCommandCenter && docker compose up -d && cd -
+
+# 2. Start MedAssist (web + marker) on the shared network
+docker compose up -d --build
 ```
+
+> **Running the app on the host** (`dotnet run --project MedAssist.Web`) is not wired up out of
+> the box: the PCC stack doesn't publish `postgres`/`qdrant`/`ollama` on host ports, and Docker's
+> container-name DNS only resolves *inside* the network. To do host-based dev you'd need to
+> override the endpoints in `config/appsettings.shared.json` (or via `__`-separated env vars) to
+> host-reachable addresses. The container flow above is the supported path.
 
 The app auto-downloads ONNX models on first start (~1.2 GB total for embedder + reranker).
 
@@ -301,11 +340,7 @@ AIDoctorAssistant/
 ├── books/
 │   └── raw/                Uploaded PDFs (git-crypt encrypted)
 ├── docker/
-│   ├── otel-collector/
-│   ├── prometheus/
-│   ├── grafana/
-│   ├── tempo/
-│   └── searxng/
+│   └── marker/             Marker OCR service (Dockerfile + app.py) — the only infra MedAssist builds
 ├── requests/
 │   └── medassist.yaak.json  Yaak/Insomnia v4 collection
 ├── docker-compose.yml

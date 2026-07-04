@@ -75,7 +75,11 @@ internal static class ServiceCollectionExtensions
         });
         services.AddSingleton<IVectorStore, QdrantVectorStore>();
 
-        services.AddScoped<ISparseVectorizer, SparseVectorizer>();
+        // BM25 vocab snapshot is process-wide and effectively static between ingest runs. The cache
+        // loads it once (via a short-lived scope, so no captive DbContext); the vectorizer is a
+        // stateless singleton over it. Previously both were Scoped → full-table reload every query (P1-9).
+        services.AddSingleton<Bm25VocabCache>();
+        services.AddSingleton<ISparseVectorizer>(sp => new SparseVectorizer(sp.GetRequiredService<Bm25VocabCache>()));
 
         services.AddSingleton<ICrossEncoderReranker>(sp =>
         {
@@ -83,9 +87,21 @@ internal static class ServiceCollectionExtensions
             return new CrossEncoderReranker(opts.RerankerPath);
         });
 
+        // Ollama chat client — a bounded timeout so a hung/slow Ollama can't block a request forever
+        // (LLM generations are legitimately long, so the timeout is generous). Endpoint carried on
+        // the client's BaseAddress and consumed by KernelFactory via the HttpClient overload.
+        services.AddHttpClient("ollama", (sp, client) =>
+        {
+            var endpoint = configuration["AI:Ollama:Endpoint"]
+                ?? throw new InvalidOperationException("AI:Ollama:Endpoint configuration is required.");
+            client.BaseAddress = new Uri(endpoint);
+            client.Timeout = TimeSpan.FromMinutes(5);
+        });
+
         services.Configure<RagOptions>(configuration.GetSection("Rag"));
         services.AddScoped(sp => AI.Kernel.KernelFactory.Build(
             configuration,
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient("ollama"),
             sp.GetRequiredService<IMedicalDictionary>(),
             sp.GetRequiredService<IVectorStore>(),
             sp.GetRequiredService<IEmbedder>(),
@@ -113,6 +129,7 @@ internal static class ServiceCollectionExtensions
         services.AddTransient<BookRepository>();
         services.AddTransient<CheckpointRepository>();
         services.AddTransient<ChatHistoryRepository>();
+        services.AddTransient<ExtractionStatusRepository>();
         services.AddTransient<BookIndexer>();
         services.AddSingleton<ExtractionTracker>();
 
@@ -121,7 +138,13 @@ internal static class ServiceCollectionExtensions
 
     internal static IServiceCollection AddQueryServices(this IServiceCollection services)
     {
-        services.AddScoped<QueryService>();
+        // Host-managed ingestion: endpoints enqueue jobs; a single BackgroundService drains them
+        // off the request thread and stops cleanly on shutdown (audit P1-8).
+        services.AddSingleton<IngestionQueue>();
+        services.AddHostedService<IngestionWorker>();
+
+        // AddHttpClient<T> already registers T (as a typed client). The earlier AddScoped<T> was dead
+        // and only muddied the lifetime, so it's removed (audit P2-14).
         services.AddHttpClient<QueryService>()
             .AddStandardResilienceHandler(options =>
             {
@@ -131,9 +154,10 @@ internal static class ServiceCollectionExtensions
                 options.Retry.Delay = TimeSpan.FromMilliseconds(300);
             });
 
-        services.AddScoped<AdminApiClient>();
-        services.AddHttpClient<AdminApiClient>();
-
+        // Admin operations run in-process (audit P1-12): the Blazor admin pages and the REST endpoints
+        // share these application services directly — no loopback API hop through AdminApiClient.
+        services.AddScoped<BookApplicationService>();
+        services.AddScoped<UserApplicationService>();
         services.AddScoped<AdminBookService>();
         services.AddScoped<AdminUserService>();
 
@@ -213,6 +237,10 @@ internal static class ServiceCollectionExtensions
                     ValidateIssuer = true,
                     ValidateAudience = true,
                     ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    // Pin the algorithm so a token can't be validated under an unexpected alg (P2-11).
+                    ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+                    ClockSkew = TimeSpan.Zero,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(opts.SecretKey))
                 };
             });
@@ -256,6 +284,7 @@ internal static class ServiceCollectionExtensions
                 .AddAspNetCoreInstrumentation()
                 .AddRuntimeInstrumentation()
                 .AddMeter("MedAssist.Web")
+                .AddMeter("MedAssist.AI")
                 .AddPrometheusExporter()
                 .AddOtlpExporter(o => o.Endpoint = otlpEndpoint))
             .WithTracing(tracing =>

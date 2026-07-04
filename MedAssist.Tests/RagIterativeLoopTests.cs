@@ -272,6 +272,9 @@ public sealed class RagIterativeLoopTests
 
         public Task DeleteCollectionAsync(CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+
+        public Task DeleteByBookAsync(string bookId, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 
     private sealed class StubEmbedder : IEmbedder

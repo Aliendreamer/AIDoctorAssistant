@@ -5,8 +5,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Suppress ONLY the native-SQLite advisory pulled in transitively by
+         Microsoft.EntityFrameworkCore.Sqlite. SQLite here is a test-only, in-memory relational
+         provider used to catch EF query-translation bugs the InMemory provider hides; it is never
+         shipped and never handles untrusted input. Scoped to this test project; production audit
+         is unaffected. Revisit when SQLitePCLRaw ships a patched e_sqlite3. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -20,6 +30,7 @@
     <ProjectReference Include="..\MedAssist.Shared\MedAssist.Shared.csproj" />
     <ProjectReference Include="..\MedAssist.AI\MedAssist.AI.csproj" />
     <ProjectReference Include="..\MedAssist.Data\MedAssist.Data.csproj" />
+    <ProjectReference Include="..\MedAssist.Web\MedAssist.Web.csproj" />
   </ItemGroup>
 
 </Project>

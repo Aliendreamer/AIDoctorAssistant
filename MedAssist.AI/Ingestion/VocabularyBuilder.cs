@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 
 namespace MedAssist.AI.Ingestion;
@@ -9,7 +10,7 @@ public sealed partial class VocabularyBuilder
     private readonly Dictionary<string, int> _termDfs = [];
     private int _totalChunks;
 
-    [GeneratedRegex(@"\p{L}+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(TokenizationConstants.WordPattern, RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex TokensRegex();
 
     public VocabularyBuilder(IBM25VocabStore vocabStore) => _vocabStore = vocabStore;
@@ -31,16 +32,15 @@ public sealed partial class VocabularyBuilder
         }
     }
 
-    public async Task FlushAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Persists the accumulated contribution for <paramref name="bookId"/> as a delta against its
+    /// previously stored contribution, then resets so the builder can accumulate the next book.
+    /// Always forwards — even with no terms — so re-indexing a book down to nothing clears its old
+    /// contribution instead of leaving it stale.
+    /// </summary>
+    public async Task FlushAsync(string bookId, CancellationToken cancellationToken = default)
     {
-        if (_termDfs.Count == 0)
-        {
-            return;
-        }
-
-        var existingTotal = await _vocabStore.GetTotalDocumentsAsync(cancellationToken);
-        var cumulativeTotal = existingTotal + _totalChunks;
-        await _vocabStore.UpsertTermsAsync(_termDfs, cumulativeTotal, cancellationToken);
+        await _vocabStore.ApplyBookContributionAsync(bookId, _termDfs, _totalChunks, cancellationToken);
         _termDfs.Clear();
         _totalChunks = 0;
     }

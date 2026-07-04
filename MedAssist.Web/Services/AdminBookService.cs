@@ -2,51 +2,32 @@ using MedAssist.Shared.Models;
 
 namespace MedAssist.Web.Services;
 
-public sealed class AdminBookService
+/// <summary>
+/// Blazor-facing adapter for admin book operations. Delegates in-process to
+/// <see cref="BookCatalogService"/> and <see cref="BookApplicationService"/> — the same services the
+/// REST endpoints use — instead of calling the app's own API over loopback (audit P1-12). Keeps the
+/// tuple-returning signatures the admin pages consume so the page code is unchanged.
+/// </summary>
+public sealed class AdminBookService(BookCatalogService catalog, BookApplicationService books)
 {
-    private readonly AdminApiClient _client;
-
-    public AdminBookService(AdminApiClient client) => _client = client;
+    private readonly BookCatalogService _catalog = catalog;
+    private readonly BookApplicationService _books = books;
 
     public async Task<IReadOnlyList<BookInfo>> GetBooksAsync(CancellationToken ct = default)
-    {
-        await _client.EnsureAuthenticatedAsync(ct);
-        var response = await _client.Http.GetFromJsonAsync<List<BookInfo>>("/api/books", ct);
-        return response ?? [];
-    }
+        => await _catalog.GetAllBooksAsync(ct);
 
     public async Task<(bool Success, string Message)> TriggerReindexAsync(int bookId, CancellationToken ct = default)
     {
-        await _client.EnsureAuthenticatedAsync(ct);
-        var response = await _client.Http.PostAsync($"/api/admin/index?id={bookId}&force=true", content: null, ct);
-        if (response.IsSuccessStatusCode)
-        {
-            return (true, "Indexing started.");
-        }
-        var body = await response.Content.ReadAsStringAsync(ct);
-        return (false, string.IsNullOrWhiteSpace(body) ? $"Error {(int)response.StatusCode}" : body);
+        var result = await _books.TriggerIndexAsync(bookId, force: true, ct);
+        return (result.Outcome == TriggerIndexOutcome.Started, result.Message);
     }
 
     public async Task<(bool Success, string Message)> UploadBookAsync(
         string bookId, string title, string author, string language, string edition,
         Stream fileStream, string fileName, CancellationToken ct = default)
     {
-        await _client.EnsureAuthenticatedAsync(ct);
-
-        using var content = new MultipartFormDataContent();
-        content.Add(new StringContent(bookId), "bookId");
-        content.Add(new StringContent(title), "title");
-        content.Add(new StringContent(author), "author");
-        content.Add(new StringContent(language), "language");
-        content.Add(new StringContent(edition), "edition");
-        content.Add(new StreamContent(fileStream), "file", fileName);
-
-        var response = await _client.Http.PostAsync("/api/admin/books/upload", content, ct);
-        if (response.IsSuccessStatusCode)
-        {
-            return (true, "Book uploaded successfully.");
-        }
-        var body = await response.Content.ReadAsStringAsync(ct);
-        return (false, string.IsNullOrWhiteSpace(body) ? $"Upload failed ({(int)response.StatusCode})" : body);
+        var result = await _books.UploadAsync(
+            new UploadBookInput(bookId, title, author, language, edition, fileStream, fileName), ct);
+        return (result.Success, result.Message);
     }
 }

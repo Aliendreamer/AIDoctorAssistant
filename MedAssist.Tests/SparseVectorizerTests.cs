@@ -97,10 +97,11 @@ public sealed class SparseVectorizerTests
         public Task<BM25VocabSnapshot> LoadAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(snapshot);
 
-        public Task<int> GetTotalDocumentsAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(0);
-
-        public Task UpsertTermsAsync(IReadOnlyDictionary<string, int> termDfs, int totalDocs, CancellationToken cancellationToken = default)
+        public Task ApplyBookContributionAsync(
+            string bookId,
+            IReadOnlyDictionary<string, int> termDocumentFrequencies,
+            int chunkCount,
+            CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 }

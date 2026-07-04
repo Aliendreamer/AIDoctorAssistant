@@ -42,6 +42,19 @@ public sealed class BookRepository(MedAssistDbContext db)
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Atomically transitions a book to <see cref="BookStatus.InProgress"/> only if it is not
+    /// already in progress. Returns true if this call won the claim. A single conditional UPDATE
+    /// closes the check-then-act race where two concurrent index triggers both started (audit P1-7).
+    /// </summary>
+    public async Task<bool> TryMarkInProgressAsync(int id, CancellationToken cancellationToken = default)
+    {
+        var updated = await db.Books
+            .Where(b => b.Id == id && b.Status != BookStatus.InProgress)
+            .ExecuteUpdateAsync(s => s.SetProperty(b => b.Status, BookStatus.InProgress), cancellationToken);
+        return updated > 0;
+    }
+
     public async Task<IReadOnlyList<BookInfo>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var entities = await db.Books.ToListAsync(cancellationToken);

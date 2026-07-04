@@ -1,13 +1,13 @@
 using FastEndpoints;
-using MedAssist.Web.Data;
+using MedAssist.Web.Services;
 
 namespace MedAssist.Web.Endpoints.Users;
 
 public sealed class DeleteUserEndpoint : EndpointWithoutRequest
 {
-    private readonly UserRepository _users;
+    private readonly UserApplicationService _users;
 
-    public DeleteUserEndpoint(UserRepository users) => _users = users;
+    public DeleteUserEndpoint(UserApplicationService users) => _users = users;
 
     public override void Configure()
     {
@@ -23,26 +23,18 @@ public sealed class DeleteUserEndpoint : EndpointWithoutRequest
             return;
         }
 
-        var allUsers = await _users.ListAsync(ct);
-        var target = allUsers.FirstOrDefault(u => u.Id == id);
-
-        if (target is null)
+        var result = await _users.DeleteAsync(id, ct);
+        switch (result.Outcome)
         {
-            await Send.NotFoundAsync(ct);
-            return;
+            case DeleteUserOutcome.Deleted:
+                await Send.NoContentAsync(ct);
+                break;
+            case DeleteUserOutcome.NotFound:
+                await Send.NotFoundAsync(ct);
+                break;
+            case DeleteUserOutcome.LastAdmin:
+                await Send.ResponseAsync(result.Message, 409, ct);
+                break;
         }
-
-        if (target.Role == "Admin")
-        {
-            var adminCount = await _users.CountAdminsAsync(ct);
-            if (adminCount <= 1)
-            {
-                await Send.ResponseAsync("Cannot delete the last Admin account.", 409, ct);
-                return;
-            }
-        }
-
-        await _users.DeleteAsync(id, ct);
-        await Send.NoContentAsync(ct);
     }
 }

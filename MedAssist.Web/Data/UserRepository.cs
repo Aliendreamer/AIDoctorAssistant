@@ -15,7 +15,10 @@ public sealed class UserRepository(MedAssistDbContext db, IPasswordHasher<UserEn
 
     public async Task<IReadOnlyList<UserEntity>> ListAsync(CancellationToken ct = default)
     {
-        return await db.Users.OrderBy(u => u.CreatedAt).ToListAsync(ct);
+        // Order client-side: the users table is tiny and admin-only, and SQLite (the test provider)
+        // cannot ORDER BY a DateTimeOffset — sorting in memory is identical on both providers.
+        var users = await db.Users.ToListAsync(ct);
+        return users.OrderBy(u => u.CreatedAt).ToList();
     }
 
     public async Task<UserEntity> CreateAsync(string username, string role, string plainPassword, CancellationToken ct = default)

@@ -1,10 +1,8 @@
 using FastEndpoints;
-using MedAssist.Data;
-using MedAssist.Data.Entities;
 using MedAssist.Shared.Models;
+using MedAssist.Web.Services;
 using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Web.Endpoints.Books;
 
@@ -27,11 +25,10 @@ public sealed class UploadBookResponse
 }
 
 [RequestTimeout("upload")]
-public sealed class UploadBookEndpoint(
-    MedAssistDbContext medAssistDbContext,
-    IConfiguration configuration) : Endpoint<UploadBookRequest, UploadBookResponse>
+public sealed class UploadBookEndpoint(BookApplicationService books) : Endpoint<UploadBookRequest, UploadBookResponse>
 {
-    private readonly MedAssistDbContext _medAssistDbContext = medAssistDbContext;
+    private readonly BookApplicationService _books = books;
+
     public override void Configure()
     {
         Post("/api/admin/books/upload");
@@ -42,56 +39,22 @@ public sealed class UploadBookEndpoint(
 
     public override async Task HandleAsync(UploadBookRequest req, CancellationToken ct)
     {
-        var pdfPath = configuration["Books:PdfPath"]
-            ?? throw new InvalidOperationException("Books:PdfPath is not configured.");
-        Directory.CreateDirectory(pdfPath);
+        await using var content = req.File.OpenReadStream();
+        var result = await _books.UploadAsync(
+            new UploadBookInput(req.BookId, req.Title, req.Author, req.Language, req.Edition, content, req.File.FileName), ct);
 
-        var destPath = Path.Combine(pdfPath, $"{req.BookId}.pdf");
-
-        await using (var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-        await using (var input = req.File.OpenReadStream())
+        if (!result.Success)
         {
-            await input.CopyToAsync(fs);
-        }
-
-        var existing = await _medAssistDbContext.Books.FirstOrDefaultAsync(b => b.BookId == req.BookId, ct);
-        int id;
-        if (existing is not null)
-        {
-            existing.Title = req.Title;
-            existing.Author = req.Author;
-            existing.Language = req.Language;
-            existing.Edition = req.Edition;
-            existing.FilePath = destPath;
-            existing.Status = BookStatus.Pending;
-            existing.TotalChunks = 0;
-            existing.IndexedAt = null;
-            await _medAssistDbContext.SaveChangesAsync(ct);
-            id = existing.Id;
-        }
-        else
-        {
-            var entity = new BookEntity
-            {
-                BookId = req.BookId,
-                Title = req.Title,
-                Author = req.Author,
-                Language = req.Language,
-                Edition = req.Edition,
-                FilePath = destPath,
-                Status = BookStatus.Pending,
-            };
-            _medAssistDbContext.Books.Add(entity);
-            await _medAssistDbContext.SaveChangesAsync(ct);
-            id = entity.Id;
+            await Send.ResponseAsync(new UploadBookResponse { Message = result.Message }, 400, ct);
+            return;
         }
 
         await Send.OkAsync(new UploadBookResponse
         {
-            Id = id,
+            Id = result.Id,
             BookId = req.BookId,
             Status = BookStatus.Pending.ToString().ToLowerInvariant(),
-            Message = $"Book '{req.Title}' uploaded. POST /api/admin/index?id={id} to index."
+            Message = $"Book '{req.Title}' uploaded. POST /api/admin/index?id={result.Id} to index."
         }, cancellation: ct);
     }
 }

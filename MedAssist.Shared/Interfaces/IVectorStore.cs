@@ -26,4 +26,11 @@ public interface IVectorStore
         CancellationToken cancellationToken = default);
 
     Task DeleteCollectionAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes only the points belonging to a single book (matched on the BookId payload),
+    /// leaving every other book's vectors intact. Use this for per-book re-indexing —
+    /// never <see cref="DeleteCollectionAsync"/>, which drops the whole corpus.
+    /// </summary>
+    Task DeleteByBookAsync(string bookId, CancellationToken cancellationToken = default);
 }

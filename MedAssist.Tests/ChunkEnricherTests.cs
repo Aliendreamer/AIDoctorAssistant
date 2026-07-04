@@ -93,6 +93,43 @@ public sealed class ChunkEnricherTests
         Assert.Empty(result);
     }
 
+    [Fact]
+    public async Task DictionaryIsLoadedOnce_AcrossManyChunks()
+    {
+        // Guards P1-10: the dictionary was reloaded (full table) on every chunk. It must load once
+        // per enricher instance (one per index run), not once per chunk.
+        var counting = new CountingDictionary(
+            new IllnessEntry { IcdCode = "E05.0", NameEn = "Graves disease", NameBg = "Болест", Aliases = [] });
+        var sut = new ChunkEnricher(counting);
+
+        for (var i = 0; i < 5; i++)
+        {
+            await sut.GetIcdCodesAsync($"chunk {i} mentioning Graves disease");
+        }
+
+        Assert.Equal(1, counting.GetAllCallCount);
+    }
+
+    private sealed class CountingDictionary(params IllnessEntry[] illnesses) : IMedicalDictionary
+    {
+        public int GetAllCallCount { get; private set; }
+
+        public Task<IReadOnlyList<IllnessEntry>> GetAllAsync(CancellationToken ct = default)
+        {
+            GetAllCallCount++;
+            return Task.FromResult<IReadOnlyList<IllnessEntry>>(illnesses);
+        }
+
+        public Task<IReadOnlyList<string>> ExpandQueryAsync(string query, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>>([query]);
+
+        public Task<IllnessEntry?> GetByIcdAsync(string icdCode, CancellationToken ct = default)
+            => Task.FromResult<IllnessEntry?>(null);
+
+        public Task<IReadOnlyList<IllnessEntry>> SearchAsync(string query, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<IllnessEntry>>([]);
+    }
+
     private sealed class StubDictionary(params IllnessEntry[] illnesses) : IMedicalDictionary
     {
         public Task<IReadOnlyList<IllnessEntry>> GetAllAsync(CancellationToken ct = default)

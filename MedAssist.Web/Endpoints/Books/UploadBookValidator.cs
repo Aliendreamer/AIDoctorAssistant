@@ -1,6 +1,7 @@
 using FastEndpoints;
 using FluentValidation;
 using MedAssist.Shared.Constants;
+using MedAssist.Shared.Validation;
 
 namespace MedAssist.Web.Endpoints.Books;
 
@@ -15,7 +16,9 @@ public sealed class UploadBookValidator : Validator<UploadBookRequest>
 
         RuleFor(r => r.BookId)
             .NotEmpty()
-            .WithMessage("BookId is required.");
+            .WithMessage("BookId is required.")
+            .Must(BookIdRules.IsValid)
+            .WithMessage("BookId must be lowercase letters, digits, and hyphens only, start with a letter or digit, and be at most 64 characters.");
 
         RuleFor(r => r.Title)
             .NotEmpty()

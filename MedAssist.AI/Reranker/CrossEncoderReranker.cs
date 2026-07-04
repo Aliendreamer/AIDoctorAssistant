@@ -50,20 +50,51 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
             .ToList();
     }
 
+    /// <summary>
+    /// Builds the model input ids: <c>[CLS] query [SEP]</c> followed by the passage without its own
+    /// leading <c>[CLS]</c>, hard-capped at <paramref name="maxTokens"/> so the sequence can never
+    /// exceed the position-embedding limit (audit P2-5). Pure and unit-testable.
+    /// </summary>
+    public static long[] CombineInputIds(IReadOnlyList<int> queryIds, IReadOnlyList<int> passageIds, int maxTokens)
+    {
+        var combined = new List<long>(queryIds.Count + passageIds.Count);
+        foreach (var id in queryIds)
+        {
+            combined.Add(id);
+        }
+
+        for (var i = 1; i < passageIds.Count; i++) // skip the passage's own [CLS]
+        {
+            combined.Add(passageIds[i]);
+        }
+
+        if (combined.Count > maxTokens)
+        {
+            combined.RemoveRange(maxTokens, combined.Count - maxTokens);
+        }
+
+        return [.. combined];
+    }
+
     private float Score(string query, string passage)
     {
         var queryIds = _tokenizer.EncodeToIds(query, _maxTokens, out _, out _);
-        var passageBudget = Math.Max(3, _maxTokens - queryIds.Count + 1);
-        var passageIds = _tokenizer.EncodeToIds(passage, passageBudget, out _, out _);
 
-        var combined = queryIds.Concat(passageIds.Skip(1)).ToArray();
-        var seqLen = combined.Length;
+        // Leave exactly enough room for the passage; encode nothing if the query already fills the
+        // budget. CombineInputIds still hard-caps as a final safety net.
+        var passageBudget = _maxTokens - queryIds.Count;
+        IReadOnlyList<int> passageIds = passageBudget > 1
+            ? _tokenizer.EncodeToIds(passage, passageBudget, out _, out _)
+            : [];
 
-        var inputIds = combined.Select(id => (long)id).ToArray();
-        var attentionMask = inputIds.Select(_ => 1L).ToArray();
+        var inputIds = CombineInputIds(queryIds, passageIds, _maxTokens);
+        var seqLen = inputIds.Length;
+
+        var attentionMask = new long[seqLen];
+        Array.Fill(attentionMask, 1L);
 
         var tokenTypeIds = new long[seqLen];
-        for (var i = queryIds.Count; i < seqLen; i++)
+        for (var i = Math.Min(queryIds.Count, seqLen); i < seqLen; i++)
         {
             tokenTypeIds[i] = 1L;
         }

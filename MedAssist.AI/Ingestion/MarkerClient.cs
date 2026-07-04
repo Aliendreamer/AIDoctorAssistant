@@ -10,13 +10,23 @@ public sealed class MarkerClient
     private readonly bool _useLlm;
     private readonly ILogger<MarkerClient> _logger;
     private readonly TimeSpan _pollInterval;
+    private readonly TimeSpan _maxPollDuration;
+    private readonly int _maxConsecutiveFailures;
 
-    public MarkerClient(HttpClient httpClient, bool useLlm, ILogger<MarkerClient> logger, TimeSpan? pollInterval = null)
+    public MarkerClient(
+        HttpClient httpClient,
+        bool useLlm,
+        ILogger<MarkerClient> logger,
+        TimeSpan? pollInterval = null,
+        TimeSpan? maxPollDuration = null,
+        int maxConsecutiveFailures = 10)
     {
         _httpClient = httpClient;
         _useLlm = useLlm;
         _logger = logger;
         _pollInterval = pollInterval ?? TimeSpan.FromSeconds(30);
+        _maxPollDuration = maxPollDuration ?? TimeSpan.FromHours(2);
+        _maxConsecutiveFailures = maxConsecutiveFailures;
     }
 
     /// <summary>
@@ -43,9 +53,19 @@ public sealed class MarkerClient
     /// </summary>
     public async Task<string> PollStatusAsync(string jobId, CancellationToken cancellationToken = default)
     {
+        var deadline = DateTimeOffset.UtcNow + _maxPollDuration;
+        var consecutiveFailures = 0;
+
         for (var poll = 1; !cancellationToken.IsCancellationRequested; poll++)
         {
             await Task.Delay(_pollInterval, cancellationToken);
+
+            // Bounded polling (audit P2-4): a job that never finishes must not poll forever and
+            // block the ingestion worker's queue.
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                throw new TimeoutException($"Marker job {jobId} did not finish within {_maxPollDuration}.");
+            }
 
             _logger.LogInformation("Marker poll {Poll} for job {JobId}", poll, jobId);
 
@@ -59,9 +79,19 @@ public sealed class MarkerClient
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogWarning(ex, "Marker poll {Poll} failed for job {JobId} — will retry", poll, jobId);
+                consecutiveFailures++;
+                if (consecutiveFailures >= _maxConsecutiveFailures)
+                {
+                    throw new InvalidOperationException(
+                        $"Marker polling for job {jobId} failed {consecutiveFailures} times in a row; giving up.", ex);
+                }
+
+                _logger.LogWarning(ex, "Marker poll {Poll} failed for job {JobId} — will retry ({Failures}/{Max})",
+                    poll, jobId, consecutiveFailures, _maxConsecutiveFailures);
                 continue;
             }
+
+            consecutiveFailures = 0;
 
             switch (status.State)
             {

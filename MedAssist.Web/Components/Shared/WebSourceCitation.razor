@@ -1,4 +1,5 @@
 @using MedAssist.Shared.Models
+@using MedAssist.Shared.Validation
 
 <div class="citation web-citation">
     <span class="badge bg-info me-2">🌐 @(Citation.SourceName ?? "Web")</span>
@@ -6,9 +7,13 @@
     {
         <strong>@Citation.ArticleTitle</strong>
     }
-    @if (!string.IsNullOrWhiteSpace(Citation.Url))
+    @if (WebFetchPolicy.IsHttpUrl(Citation.Url))
     {
         <a href="@Citation.Url" target="_blank" rel="noopener noreferrer" class="ms-2">@Citation.Url</a>
+    }
+    else if (!string.IsNullOrWhiteSpace(Citation.Url))
+    {
+        <span class="ms-2">@Citation.Url</span>
     }
 </div>
 

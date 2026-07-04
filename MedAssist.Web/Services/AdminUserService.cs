@@ -1,45 +1,28 @@
 namespace MedAssist.Web.Services;
 
-public sealed record UserInfo(Guid Id, string Username, string Role, DateTimeOffset CreatedAt);
-
-public sealed class AdminUserService
+/// <summary>
+/// Blazor-facing adapter for admin user operations. Delegates in-process to
+/// <see cref="UserApplicationService"/> — the same service the REST user endpoints use — instead of
+/// calling the app's own API over loopback (audit P1-12). Keeps the tuple-returning signatures the
+/// admin pages consume so the page code is unchanged.
+/// </summary>
+public sealed class AdminUserService(UserApplicationService users)
 {
-    private readonly AdminApiClient _client;
-
-    public AdminUserService(AdminApiClient client) => _client = client;
+    private readonly UserApplicationService _users = users;
 
     public async Task<IReadOnlyList<UserInfo>> GetUsersAsync(CancellationToken ct = default)
-    {
-        await _client.EnsureAuthenticatedAsync(ct);
-        var list = await _client.Http.GetFromJsonAsync<List<UserInfo>>("/api/admin/users", ct);
-        return list ?? [];
-    }
+        => await _users.ListAsync(ct);
 
     public async Task<(bool Success, string Message)> CreateUserAsync(
         string username, string role, string password, CancellationToken ct = default)
     {
-        await _client.EnsureAuthenticatedAsync(ct);
-        var response = await _client.Http.PostAsJsonAsync("/api/admin/users",
-            new { username, role, password }, ct);
-
-        if (response.IsSuccessStatusCode)
-        {
-            return (true, string.Empty);
-        }
-        var body = await response.Content.ReadAsStringAsync(ct);
-        return (false, string.IsNullOrWhiteSpace(body) ? $"Error {(int)response.StatusCode}" : body);
+        var result = await _users.CreateAsync(username, role, password, ct);
+        return (result.Outcome == CreateUserOutcome.Created, result.Message);
     }
 
     public async Task<(bool Success, string Message)> DeleteUserAsync(Guid id, CancellationToken ct = default)
     {
-        await _client.EnsureAuthenticatedAsync(ct);
-        var response = await _client.Http.DeleteAsync($"/api/admin/users/{id}", ct);
-
-        if (response.IsSuccessStatusCode)
-        {
-            return (true, string.Empty);
-        }
-        var body = await response.Content.ReadAsStringAsync(ct);
-        return (false, string.IsNullOrWhiteSpace(body) ? $"Error {(int)response.StatusCode}" : body);
+        var result = await _users.DeleteAsync(id, ct);
+        return (result.Outcome == DeleteUserOutcome.Deleted, result.Message);
     }
 }

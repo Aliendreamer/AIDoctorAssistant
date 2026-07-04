@@ -172,9 +172,16 @@ public sealed partial class MarkdownChunker
             var (path, text, type) = chunks[i];
             if (i > 0 && chunks[i - 1].HeadingPath == path)
             {
-                var prev = chunks[i - 1].Text;
-                var overlap = prev.Length > _overlapChars ? prev[^_overlapChars..] : prev;
-                text = overlap + "\n" + text;
+                // Cap the overlap so prepending it can't push the chunk past the token budget, which
+                // would make the embedder silently truncate the chunk's own tail (audit P3-2).
+                var available = (_maxTokens * 4) - text.Length - 1;
+                if (available > 0)
+                {
+                    var overlapLen = Math.Min(_overlapChars, available);
+                    var prev = chunks[i - 1].Text;
+                    var overlap = prev.Length > overlapLen ? prev[^overlapLen..] : prev;
+                    text = overlap + "\n" + text;
+                }
             }
 
             result.Add((path, text, type));
@@ -197,7 +204,9 @@ public sealed partial class MarkdownChunker
                 continue;
             }
 
-            if (EstimateTokens(pending.Value.Text) < _minTokens)
+            // Only merge a small chunk into the next when they share a heading — merging across a
+            // heading boundary kept the previous heading path and mislabeled the content (audit P3-1).
+            if (EstimateTokens(pending.Value.Text) < _minTokens && pending.Value.HeadingPath == chunk.HeadingPath)
             {
                 pending = (pending.Value.HeadingPath, pending.Value.Text + "\n" + chunk.Text, pending.Value.ContentType);
             }

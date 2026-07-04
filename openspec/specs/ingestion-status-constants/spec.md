@@ -1,35 +1,43 @@
 # ingestion-status-constants Specification
 
 ## Purpose
-Define canonical string constants for book and checkpoint ingestion status values, eliminating raw string literals across entities, EF configurations, and service logic.
+Represent book and checkpoint ingestion status as a single strongly-typed value across the code and
+the database, eliminating raw string literals. The original string-constants approach
+(`IngestionStatus` const strings) has been **superseded by the `BookStatus` enum**; this spec
+documents the enum as the canonical representation.
 
 ## Requirements
 
-### Requirement: IngestionStatus provides canonical status string values
-`MedAssist.Shared.Constants.IngestionStatus` SHALL expose `const string` fields for every status value used in book and checkpoint DB columns: `Pending` (`"pending"`), `InProgress` (`"in_progress"`), `Indexed` (`"indexed"`), `Complete` (`"complete"`).
+### Requirement: BookStatus enum is the canonical status representation
+`MedAssist.Shared.Models.BookStatus` SHALL be the single type for book and checkpoint ingestion
+status. Its members SHALL be `Pending`, `InProgress`, `Indexed`, and `Failed`. No raw status string
+literals SHALL be used in entities, EF configuration, or service logic. (There is no
+`IngestionStatus` string-constants class; a prior spec that mandated one is retired by this content.)
 
-#### Scenario: BookEntity default uses constant
+#### Scenario: BookEntity default status
 - **WHEN** a `BookEntity` is constructed without an explicit status
-- **THEN** its `Status` property initializer SHALL reference `IngestionStatus.Pending`
+- **THEN** its `Status` property SHALL default to `BookStatus.Pending`
 
-#### Scenario: IngestionCheckpointEntity default uses constant
+#### Scenario: IngestionCheckpointEntity default status
 - **WHEN** an `IngestionCheckpointEntity` is constructed without an explicit status
-- **THEN** its `Status` property initializer SHALL reference `IngestionStatus.InProgress`
+- **THEN** its `Status` property SHALL default to `BookStatus.InProgress`
 
-#### Scenario: EF configuration defaults use constants
+### Requirement: Status persists as a Postgres enum type
+The `BookStatus` enum SHALL be mapped to a Postgres enum type named `book_status`
+(`opt.MapEnum<BookStatus>("book_status")`), and the book `status` column default SHALL be set with
+the enum value (`HasDefaultValue(BookStatus.Pending)`), not a string literal.
+
+#### Scenario: EF configuration default uses the enum
 - **WHEN** `BookEntityConfiguration` sets `HasDefaultValue` for the status column
-- **THEN** it SHALL pass `IngestionStatus.Pending`
-- **WHEN** `IngestionCheckpointEntityConfiguration` sets `HasDefaultValue` for the status column
-- **THEN** it SHALL pass `IngestionStatus.InProgress`
+- **THEN** it SHALL pass `BookStatus.Pending` (the enum member, not a string)
 
-#### Scenario: BookIndexer checkpoint call uses constant
-- **WHEN** `BookIndexer.SaveCheckpointAsync` is called during indexing
-- **THEN** the status argument SHALL reference `IngestionStatus.InProgress`
+### Requirement: Indexing transitions use enum members
+`BookIndexer` and the catalog query SHALL reference `BookStatus` members directly.
 
-#### Scenario: BookIndexer resume guard uses constant
-- **WHEN** `BookIndexer` checks whether a checkpoint is already complete
-- **THEN** the comparison value SHALL reference `IngestionStatus.Complete`
+#### Scenario: Checkpoint writes use the enum
+- **WHEN** `BookIndexer` writes a checkpoint during indexing
+- **THEN** the status SHALL be a `BookStatus` member (`InProgress` while running, `Indexed` on completion)
 
-#### Scenario: BookCatalogService filter uses constant
-- **WHEN** `BookCatalogService.GetAllBooksAsync` filters books by status
-- **THEN** the `.Where` predicate SHALL compare against `IngestionStatus.Indexed`
+#### Scenario: Catalog filter uses the enum
+- **WHEN** the book catalog lists searchable books
+- **THEN** the filter SHALL compare against `BookStatus.Indexed`

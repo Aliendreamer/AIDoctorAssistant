@@ -9,7 +9,7 @@ using SKKernel = Microsoft.SemanticKernel.Kernel;
 
 namespace MedAssist.AI.Plugins;
 
-public abstract class RagPluginBase
+public abstract partial class RagPluginBase
 {
     private readonly SKKernel _kernel;
     private readonly IMedicalDictionary _dictionary;
@@ -118,7 +118,8 @@ public abstract class RagPluginBase
         }
 
         var topScore = scored.Count > 0 ? scored[0].Score : float.NegativeInfinity;
-        _logger.LogInformation("Reranker top score for query '{Query}' (search: '{SearchQuery}'): {Score:F3} (threshold: {Threshold})",
+        // Debug level: query text can be PHI, so it stays out of default (Information) logs (audit P2-9).
+        _logger.LogDebug("Reranker top score for query '{Query}' (search: '{SearchQuery}'): {Score:F3} (threshold: {Threshold})",
             query, searchQuery, topScore, _options.MinAnswerScore);
 
         // Reject if the best result still doesn't meet the answer quality floor
@@ -137,7 +138,7 @@ public abstract class RagPluginBase
             var anyFound = latinTerms.Any(t => topTexts.Any(txt => txt.Contains(t, StringComparison.OrdinalIgnoreCase)));
             if (!anyFound)
             {
-                _logger.LogInformation("Latin term check failed for query '{Query}' — terms [{Terms}] absent from top chunks",
+                _logger.LogDebug("Latin term check failed for query '{Query}' — terms [{Terms}] absent from top chunks",
                     query, string.Join(", ", latinTerms));
                 return new QueryResult { Answer = "The indexed books don't contain sufficiently relevant information to answer this question. Try rephrasing or consult an external source." };
             }
@@ -343,21 +344,28 @@ public abstract class RagPluginBase
         var response = await chat.GetChatMessageContentAsync(rewriteHistory, cancellationToken: cancellationToken);
         var rewritten = response.Content?.Trim();
 
-        _logger.LogInformation("Query rewrite: '{Original}' → '{Rewritten}'", query, rewritten);
+        _logger.LogDebug("Query rewrite: '{Original}' → '{Rewritten}'", query, rewritten);
         return string.IsNullOrWhiteSpace(rewritten) ? query : rewritten;
     }
 
+    [GeneratedRegex(@"^#{1,6}\s+", RegexOptions.Multiline)]
+    private static partial Regex MarkdownHeadingRegex();
+    [GeneratedRegex(@"\*\*(.+?)\*\*", RegexOptions.Singleline)]
+    private static partial Regex MarkdownBoldRegex();
+    [GeneratedRegex(@"\*(.+?)\*", RegexOptions.Singleline)]
+    private static partial Regex MarkdownItalicRegex();
+    [GeneratedRegex(@"^[ \t]*[-*]\s+", RegexOptions.Multiline)]
+    private static partial Regex MarkdownBulletRegex();
+    [GeneratedRegex(@"^[ \t]*\d+\.\s+", RegexOptions.Multiline)]
+    private static partial Regex MarkdownNumberedRegex();
+
     private static string StripMarkdown(string text)
     {
-        // Remove heading markers: ## Title → Title
-        text = Regex.Replace(text, @"^#{1,6}\s+", "", RegexOptions.Multiline);
-        // Remove bold/italic: **text** → text, *text* → text
-        text = Regex.Replace(text, @"\*\*(.+?)\*\*", "$1", RegexOptions.Singleline);
-        text = Regex.Replace(text, @"\*(.+?)\*", "$1", RegexOptions.Singleline);
-        // Remove bullet markers: "- item" or "* item" → "item"
-        text = Regex.Replace(text, @"^[ \t]*[-*]\s+", "", RegexOptions.Multiline);
-        // Remove numbered list markers: "1. item" → "item"
-        text = Regex.Replace(text, @"^[ \t]*\d+\.\s+", "", RegexOptions.Multiline);
+        text = MarkdownHeadingRegex().Replace(text, "");   // ## Title → Title
+        text = MarkdownBoldRegex().Replace(text, "$1");     // **text** → text
+        text = MarkdownItalicRegex().Replace(text, "$1");   // *text* → text
+        text = MarkdownBulletRegex().Replace(text, "");     // "- item" → "item"
+        text = MarkdownNumberedRegex().Replace(text, "");   // "1. item" → "item"
         return text.Trim();
     }
 

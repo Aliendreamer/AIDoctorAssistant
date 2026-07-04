@@ -37,9 +37,12 @@ public sealed class QdrantVectorStore : IVectorStore
             namedVectors.Vectors.Add(VectorStoreConstants.Vectors.Sparse, sparseVec);
         }
 
+        // Deterministic id from the chunk's identity so re-indexing overwrites instead of
+        // appending duplicate points (audit P1-6). Summaries get a distinct key namespace.
+        var pointKey = $"{(chunk.IsSummary ? "summary:" : string.Empty)}{chunk.BookId}:{chunk.ChunkIndex}";
         var point = new PointStruct
         {
-            Id = new PointId { Uuid = Guid.NewGuid().ToString() },
+            Id = new PointId { Uuid = DeterministicGuid.Create(pointKey).ToString() },
             Vectors = new Vectors { Vectors_ = namedVectors },
             Payload =
             {
@@ -153,6 +156,26 @@ public sealed class QdrantVectorStore : IVectorStore
         {
             await _client.DeleteCollectionAsync(VectorStoreConstants.CollectionName, cancellationToken: cancellationToken);
         }
+    }
+
+    public async Task DeleteByBookAsync(string bookId, CancellationToken cancellationToken = default)
+    {
+        if (!await _client.CollectionExistsAsync(VectorStoreConstants.CollectionName, cancellationToken))
+        {
+            return;
+        }
+
+        var filter = new Filter();
+        filter.Must.Add(new Condition
+        {
+            Field = new FieldCondition
+            {
+                Key = VectorStoreConstants.Payload.BookId,
+                Match = new Match { Keyword = bookId }
+            }
+        });
+
+        await _client.DeleteAsync(VectorStoreConstants.CollectionName, filter, cancellationToken: cancellationToken);
     }
 
     private async Task<IReadOnlyList<MedicalChunk>> HybridSearchAsync(

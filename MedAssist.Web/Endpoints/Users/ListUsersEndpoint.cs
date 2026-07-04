@@ -1,5 +1,5 @@
 using FastEndpoints;
-using MedAssist.Web.Data;
+using MedAssist.Web.Services;
 
 namespace MedAssist.Web.Endpoints.Users;
 
@@ -7,9 +7,9 @@ public sealed record UserDto(Guid Id, string Username, string Role, DateTimeOffs
 
 public sealed class ListUsersEndpoint : EndpointWithoutRequest<IReadOnlyList<UserDto>>
 {
-    private readonly UserRepository _users;
+    private readonly UserApplicationService _users;
 
-    public ListUsersEndpoint(UserRepository users) => _users = users;
+    public ListUsersEndpoint(UserApplicationService users) => _users = users;
 
     public override void Configure()
     {

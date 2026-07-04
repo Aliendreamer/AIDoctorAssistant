@@ -39,76 +39,136 @@ public sealed class BM25VocabService(MedAssistDbContext medAssistDbContext) : IB
         return new BM25VocabSnapshot(termIds, idfWeights, totalDocs);
     }
 
-    public async Task<int> GetTotalDocumentsAsync(CancellationToken cancellationToken = default)
-    {
-
-        return await _medAssistDbContext.Bm25Stats
-            .Where(s => s.Id == 1)
-            .Select(s => s.TotalDocuments)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
-
-    public async Task UpsertTermsAsync(
-        IReadOnlyDictionary<string, int> termDfs,
-        int totalDocs,
+    public async Task ApplyBookContributionAsync(
+        string bookId,
+        IReadOnlyDictionary<string, int> termDocumentFrequencies,
+        int chunkCount,
         CancellationToken cancellationToken = default)
     {
-
         await using var tx = await _medAssistDbContext.Database.BeginTransactionAsync(cancellationToken);
+        var now = DateTimeOffset.UtcNow;
 
-        // Update global stats — one row, no full-table scan
-        var stats = await _medAssistDbContext.Bm25Stats.FindAsync([1], cancellationToken);
-        if (stats is null)
+        // The book's previously stored contribution — the baseline every delta is measured against.
+        var oldBookRows = await _medAssistDbContext.Bm25BookTerms
+            .Where(t => t.BookId == bookId)
+            .ToListAsync(cancellationToken);
+        var oldTermDfs = oldBookRows.ToDictionary(t => t.Term, t => t.DocumentFrequency);
+
+        var oldStats = await _medAssistDbContext.Bm25BookStats
+            .FirstOrDefaultAsync(s => s.BookId == bookId, cancellationToken);
+        var oldChunkCount = oldStats?.ChunkCount ?? 0;
+
+        // 1. Corpus size: apply only the change in this book's chunk count.
+        var totalDelta = chunkCount - oldChunkCount;
+        if (totalDelta != 0)
         {
-            _medAssistDbContext.Bm25Stats.Add(new Bm25StatsEntity
+            var stats = await _medAssistDbContext.Bm25Stats.FindAsync([1], cancellationToken);
+            if (stats is null)
             {
-                Id = 1,
-                TotalDocuments = totalDocs,
-                UpdatedAt = DateTimeOffset.UtcNow
-            });
-        }
-        else
-        {
-            stats.TotalDocuments = totalDocs;
-            stats.UpdatedAt = DateTimeOffset.UtcNow;
-        }
-
-        var termKeys = termDfs.Keys.ToList();
-        var existingMap = await _medAssistDbContext.Bm25Vocab
-            .AsNoTracking()
-            .Where(v => termKeys.Contains(v.Term))
-            .ToDictionaryAsync(v => v.Term, cancellationToken);
-
-        var toUpdate = new List<Bm25VocabEntity>();
-        var toAdd = new List<Bm25VocabEntity>();
-
-        foreach (var (term, df) in termDfs)
-        {
-            if (existingMap.TryGetValue(term, out var existing))
-            {
-                existing.DocumentFrequency += df;
-                existing.UpdatedAt = DateTimeOffset.UtcNow;
-                toUpdate.Add(existing);
+                _medAssistDbContext.Bm25Stats.Add(new Bm25StatsEntity
+                {
+                    Id = 1,
+                    TotalDocuments = totalDelta,
+                    UpdatedAt = now
+                });
             }
             else
             {
-                toAdd.Add(new Bm25VocabEntity
+                stats.TotalDocuments += totalDelta;
+                stats.UpdatedAt = now;
+            }
+        }
+
+        // 2. Global document frequencies: fold in each term's (new − old) delta.
+        var affectedTerms = new HashSet<string>(oldTermDfs.Keys);
+        affectedTerms.UnionWith(termDocumentFrequencies.Keys);
+
+        var deltas = new Dictionary<string, int>();
+        foreach (var term in affectedTerms)
+        {
+            var delta = termDocumentFrequencies.GetValueOrDefault(term) - oldTermDfs.GetValueOrDefault(term);
+            if (delta != 0)
+            {
+                deltas[term] = delta;
+            }
+        }
+
+        if (deltas.Count > 0)
+        {
+            var deltaTerms = deltas.Keys.ToList();
+            var globalRows = await _medAssistDbContext.Bm25Vocab
+                .Where(v => deltaTerms.Contains(v.Term))
+                .ToDictionaryAsync(v => v.Term, cancellationToken);
+
+            foreach (var (term, delta) in deltas)
+            {
+                if (globalRows.TryGetValue(term, out var row))
                 {
+                    row.DocumentFrequency += delta;
+                    row.UpdatedAt = now;
+                    // The last contributor left — drop the row rather than keep a zero (or negative,
+                    // were the accounting ever off) entry lingering in the corpus vocabulary.
+                    if (row.DocumentFrequency <= 0)
+                    {
+                        _medAssistDbContext.Bm25Vocab.Remove(row);
+                    }
+                }
+                else if (delta > 0)
+                {
+                    _medAssistDbContext.Bm25Vocab.Add(new Bm25VocabEntity
+                    {
+                        Term = term,
+                        DocumentFrequency = delta,
+                        UpdatedAt = now
+                    });
+                }
+            }
+        }
+
+        // 3. Replace the book's stored contribution in place (update/insert/delete per term) so a
+        //    delete+insert of the same (book_id, term) key never collides in one SaveChanges.
+        var oldByTerm = oldBookRows.ToDictionary(t => t.Term);
+        foreach (var (term, df) in termDocumentFrequencies)
+        {
+            if (df <= 0)
+            {
+                continue;
+            }
+
+            if (oldByTerm.Remove(term, out var existing))
+            {
+                existing.DocumentFrequency = df;
+            }
+            else
+            {
+                _medAssistDbContext.Bm25BookTerms.Add(new Bm25BookTermEntity
+                {
+                    BookId = bookId,
                     Term = term,
-                    DocumentFrequency = df,
-                    UpdatedAt = DateTimeOffset.UtcNow
+                    DocumentFrequency = df
                 });
             }
         }
 
-        if (toUpdate.Count > 0)
+        // Terms the book no longer contains.
+        if (oldByTerm.Count > 0)
         {
-            _medAssistDbContext.Bm25Vocab.UpdateRange(toUpdate);
+            _medAssistDbContext.Bm25BookTerms.RemoveRange(oldByTerm.Values);
         }
 
-        if (toAdd.Count > 0)
+        if (oldStats is null)
         {
-            _medAssistDbContext.Bm25Vocab.AddRange(toAdd);
+            _medAssistDbContext.Bm25BookStats.Add(new Bm25BookStatsEntity
+            {
+                BookId = bookId,
+                ChunkCount = chunkCount,
+                UpdatedAt = now
+            });
+        }
+        else
+        {
+            oldStats.ChunkCount = chunkCount;
+            oldStats.UpdatedAt = now;
         }
 
         await _medAssistDbContext.SaveChangesAsync(cancellationToken);

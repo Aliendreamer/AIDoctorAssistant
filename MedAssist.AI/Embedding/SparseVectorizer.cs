@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 
@@ -7,12 +8,10 @@ namespace MedAssist.AI.Embedding;
 public sealed partial class SparseVectorizer : ISparseVectorizer
 {
     private readonly IBM25VocabStore _vocabStore;
-    private BM25VocabSnapshot? _snapshot;
-    private readonly SemaphoreSlim _initLock = new(1, 1);
 
     private const float _k1 = 1.5f;
 
-    [GeneratedRegex(@"\p{L}+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(TokenizationConstants.WordPattern, RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex TokensRegex();
 
     public SparseVectorizer(IBM25VocabStore vocabStore) => _vocabStore = vocabStore;
@@ -49,24 +48,10 @@ public sealed partial class SparseVectorizer : ISparseVectorizer
         return Compute(text, vocab);
     }
 
-    private async Task<BM25VocabSnapshot> EnsureLoadedAsync(CancellationToken cancellationToken)
-    {
-        if (_snapshot is not null)
-        {
-            return _snapshot;
-        }
-
-        await _initLock.WaitAsync(cancellationToken);
-        try
-        {
-            _snapshot ??= await _vocabStore.LoadAsync(cancellationToken);
-            return _snapshot;
-        }
-        finally
-        {
-            _initLock.Release();
-        }
-    }
+    // Caching is the store's responsibility (the singleton Bm25VocabCache in production); this stays
+    // a stateless computer so it can safely be a singleton itself (audit P1-9).
+    private Task<BM25VocabSnapshot> EnsureLoadedAsync(CancellationToken cancellationToken)
+        => _vocabStore.LoadAsync(cancellationToken);
 
     private static SparseVector Compute(string text, BM25VocabSnapshot vocab)
     {

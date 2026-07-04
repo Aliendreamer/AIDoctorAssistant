@@ -1,5 +1,4 @@
 using FastEndpoints;
-using MedAssist.AI.Ingestion;
 using MedAssist.Data.Repositories;
 using MedAssist.Web.Services;
 
@@ -9,13 +8,13 @@ public sealed class ExtractBookEndpoint : EndpointWithoutRequest
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ExtractionTracker _tracker;
-    private readonly ILogger<ExtractBookEndpoint> _logger;
+    private readonly IngestionQueue _queue;
 
-    public ExtractBookEndpoint(IServiceScopeFactory scopeFactory, ExtractionTracker tracker, ILogger<ExtractBookEndpoint> logger)
+    public ExtractBookEndpoint(IServiceScopeFactory scopeFactory, ExtractionTracker tracker, IngestionQueue queue)
     {
         _scopeFactory = scopeFactory;
         _tracker = tracker;
-        _logger = logger;
+        _queue = queue;
     }
 
     public override void Configure()
@@ -42,48 +41,17 @@ public sealed class ExtractBookEndpoint : EndpointWithoutRequest
             return;
         }
 
-        if (!_tracker.TryStart(id, book.BookId, out var existing))
+        var outcome = await _tracker.TryStartAsync(id, book.BookId, ct);
+        if (!outcome.Started)
         {
-            if (existing.State == ExtractionState.Running)
-            {
-                await Send.ResponseAsync(new { message = $"Extraction already in progress for '{book.BookId}'." }, 409, ct);
-                return;
-            }
-            _tracker.Reset(id);
-            _tracker.TryStart(id, book.BookId, out _);
+            await Send.ResponseAsync(new { message = $"Extraction already in progress for '{book.BookId}'." }, 409, ct);
+            return;
         }
 
-        var bookId = book.BookId;
-        var filePath = book.FilePath;
+        // Hand off to the host-managed ingestion worker instead of a detached Task.Run (audit P1-8).
+        await _queue.EnqueueAsync(new IngestionJob(
+            IngestionJobKind.Extract, id, book.BookId, book.Title, book.Author, book.Language, book.Edition, book.FilePath), ct);
 
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await using var bgScope = _scopeFactory.CreateAsyncScope();
-                var marker = bgScope.ServiceProvider.GetRequiredService<MarkerClient>();
-
-                _logger.LogInformation("Submitting Marker job for {BookId}", bookId);
-                var jobId = await marker.StartConversionAsync(filePath);
-
-                _logger.LogInformation("Polling Marker job {JobId} for {BookId}", jobId, bookId);
-                var savePath = await marker.PollStatusAsync(jobId);
-
-                if (!File.Exists(savePath))
-                {
-                    throw new InvalidOperationException($"Marker reported done but file not found: {savePath}");
-                }
-
-                _tracker.MarkDone(id);
-                _logger.LogInformation("Marker extraction done for {BookId}, saved to {Path}", bookId, savePath);
-            }
-            catch (Exception ex)
-            {
-                _tracker.MarkFailed(id, ex.Message);
-                _logger.LogError(ex, "Marker extraction failed for {BookId}", bookId);
-            }
-        }, CancellationToken.None);
-
-        await Send.ResponseAsync(new { message = $"Extraction started for '{bookId}'. Poll GET /api/admin/books/extract/status?id={id} for progress." }, 202, ct);
+        await Send.ResponseAsync(new { message = $"Extraction started for '{book.BookId}'. Poll GET /api/admin/books/extract/status?id={id} for progress." }, 202, ct);
     }
 }

@@ -1,6 +1,7 @@
 @page "/query"
 @using MedAssist.Data.Repositories
 @using MedAssist.Shared.Models
+@using MedAssist.Shared.Validation
 @using MedAssist.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
@@ -104,7 +105,7 @@
                                         else if (src.SourceType == SourceType.Web)
                                         {
                                             <span class="web-source-icon">&#127760;</span>
-                                            @if (!string.IsNullOrEmpty(src.Url))
+                                            @if (WebFetchPolicy.IsHttpUrl(src.Url))
                                             {
                                                 <a href="@src.Url" target="_blank" rel="noopener noreferrer">@(src.ArticleTitle ?? src.Url)</a>
                                             }
