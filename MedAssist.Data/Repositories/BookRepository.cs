@@ -1,10 +1,11 @@
 using MedAssist.Data.Entities;
+using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace MedAssist.Data.Repositories;
 
-public sealed class BookRepository(MedAssistDbContext db)
+public sealed class BookRepository(MedAssistDbContext db) : IBookRepository
 {
     public async Task UpsertAsync(BookInfo book, CancellationToken cancellationToken = default)
     {

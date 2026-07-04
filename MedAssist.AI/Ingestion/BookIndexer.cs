@@ -1,7 +1,6 @@
 using System.Diagnostics.Metrics;
 using System.Text.RegularExpressions;
 using MedAssist.AI.Dictionary;
-using MedAssist.Data.Repositories;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 using Microsoft.Extensions.Logging;
@@ -19,8 +18,8 @@ public sealed class BookIndexer
     private readonly ISparseVectorizer _sparseVectorizer;
     private readonly MarkdownChunker _chunker;
     private readonly ChunkEnricher _enricher;
-    private readonly BookRepository _bookRepo;
-    private readonly CheckpointRepository _checkpointRepo;
+    private readonly IBookRepository _bookRepo;
+    private readonly ICheckpointRepository _checkpointRepo;
     private readonly VocabularyBuilder _vocabBuilder;
     private readonly Bm25VocabCache _vocabCache;
     private readonly ILogger<BookIndexer> _logger;
@@ -32,8 +31,8 @@ public sealed class BookIndexer
         ISparseVectorizer sparseVectorizer,
         MarkdownChunker chunker,
         ChunkEnricher enricher,
-        BookRepository bookRepo,
-        CheckpointRepository checkpointRepo,
+        IBookRepository bookRepo,
+        ICheckpointRepository checkpointRepo,
         VocabularyBuilder vocabBuilder,
         Bm25VocabCache vocabCache,
         ILogger<BookIndexer> logger)

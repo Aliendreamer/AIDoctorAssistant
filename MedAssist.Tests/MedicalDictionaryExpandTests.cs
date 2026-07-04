@@ -1,4 +1,4 @@
-using MedAssist.AI.Dictionary;
+using MedAssist.Data.Services;
 using MedAssist.Data;
 using MedAssist.Data.Entities;
 using Microsoft.EntityFrameworkCore;

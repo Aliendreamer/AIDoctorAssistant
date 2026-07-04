@@ -1,17 +1,10 @@
 using MedAssist.Data.Entities;
+using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 
 namespace MedAssist.Data.Repositories;
 
-public sealed record IngestionCheckpoint(
-    string BookId,
-    int TotalChunks,
-    int IndexedChunks,
-    int LastChunkIndex,
-    BookStatus Status,
-    DateTimeOffset UpdatedAt);
-
-public sealed class CheckpointRepository(MedAssistDbContext db)
+public sealed class CheckpointRepository(MedAssistDbContext db) : ICheckpointRepository
 {
     public async Task UpsertAsync(IngestionCheckpoint checkpoint, CancellationToken cancellationToken = default)
     {

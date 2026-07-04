@@ -1,9 +1,13 @@
 ## .NET
 bin/
 obj/
+publish/
 *.user
 *.suo
 .vs/
+
+## Tooling artifacts
+.playwright-mcp/
 *.lscache
 TestResults/
 

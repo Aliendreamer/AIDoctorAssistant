@@ -10,53 +10,13 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:8080
-      # All other app config (DB, Ollama, Qdrant, SearXNG, OTEL, Marker, Books, Models)
+      # All other app config (DB, Ollama, Qdrant, SearXNG, OTEL, MinerU, Books, Models)
       # lives in config/appsettings.shared.json, which is loaded *after* env vars and
       # therefore overrides them — so set those values there, not here.
     volumes:
       - medassist-models:/models
       - ./books/uniquebooks:/books/uniquebooks
       - ./books/mdFiles:/books/mdfiles
-    depends_on:
-      marker:
-        condition: service_healthy
-    networks:
-      - medassist-net
-      - pcc-net
-
-  marker:
-    build:
-      context: ./docker/marker
-      dockerfile: Dockerfile
-    ports:
-      - "5002:5002"
-    environment:
-      - MARKER_LLM_ENDPOINT=http://ollama:11434/v1
-      - MARKER_LLM_MODEL=qwen2.5vl:7b
-      - BOOKS_MD_PATH=/books/mdfiles
-    volumes:
-      - ./books/uniquebooks:/books/uniquebooks
-      - ./books/mdFiles:/books/mdfiles
-      - marker-models:/root/.cache/datalab
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request, json; r=urllib.request.urlopen('http://localhost:5002/health', timeout=5); d=json.loads(r.read()); exit(0 if d.get('models_loaded') else 1)",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 20
-      start_period: 10m
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     networks:
       - medassist-net
       - pcc-net
@@ -64,17 +24,24 @@ services:
   # Shared infra is provided by the PersonalCommandCenter stack
   # (personalcommandcenter_default network), reached here by container name:
   #   postgres:5432, qdrant:6334 (gRPC), ollama:11434, searxng:8080,
-  #   otel-collector:4317 (OTLP gRPC).
-  # The observability backends (tempo/prometheus/grafana) and pgAdmin live in
-  # the shared PCC stack too — aidoctor only runs the .NET app + marker.
+  #   mineru:8000 (OCR), otel-collector:4317 (OTLP gRPC).
+  # OCR is the shared MinerU service (migrate-marker-to-mineru) — aidoctor no longer builds its own
+  # GPU OCR container; it only runs the .NET app. The observability backends (tempo/prometheus/
+  # grafana) and pgAdmin also live in the shared PCC stack.
 
 volumes:
   medassist-models:
-  marker-models:
 
 networks:
   medassist-net:
     driver: bridge
+    # The WSL2 egress path (a PPPoE-style tunnel) has a 1492-byte MTU, but Docker networks default
+    # to 1500 — so full-size frames from containers get blackholed and large outbound downloads
+    # (e.g. runtime model fetches) stall. Pin this network to the real path MTU. NOTE: this only
+    # affects runtime container egress; the daemon-default MTU (/etc/docker/daemon.json "mtu": 1492)
+    # is what fixes `docker build` downloads, since builds use the default bridge, not this network.
+    driver_opts:
+      com.docker.network.driver.mtu: "1492"
   pcc-net:
     external: true
     name: personalcommandcenter_default

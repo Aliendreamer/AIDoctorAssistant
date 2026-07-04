@@ -81,10 +81,9 @@ public sealed class IngestionWorker(
             }
             else
             {
-                var marker = scope.ServiceProvider.GetRequiredService<MarkerClient>();
-                logger.LogInformation("Submitting Marker job for {BookId} at {Path}", job.BookSlug, job.FilePath);
-                var jobId = await marker.StartConversionAsync(job.FilePath, ct);
-                markdown = await marker.PollStatusAsync(jobId, ct);
+                var mineru = scope.ServiceProvider.GetRequiredService<MinerUClient>();
+                logger.LogInformation("Converting {BookId} via MinerU at {Path}", job.BookSlug, job.FilePath);
+                markdown = await mineru.ConvertToMarkdownAsync(job.FilePath, ct);
                 await File.WriteAllTextAsync(markdownPath, markdown, ct);
             }
 
@@ -107,22 +106,20 @@ public sealed class IngestionWorker(
 
     private async Task RunExtractAsync(IngestionJob job, CancellationToken ct)
     {
+        var mdBasePath = configuration["Books:MdPath"] ?? "/books/mdfiles";
+        var markdownPath = BookIdRules.ResolveWithin(mdBasePath, job.BookSlug, ".md");
+
         await using var scope = scopeFactory.CreateAsyncScope();
         try
         {
-            var marker = scope.ServiceProvider.GetRequiredService<MarkerClient>();
-            logger.LogInformation("Submitting Marker job for {BookId}", job.BookSlug);
-            var jobId = await marker.StartConversionAsync(job.FilePath, ct);
-            var savePath = await marker.PollStatusAsync(jobId, ct);
-
-            if (!File.Exists(savePath))
-            {
-                throw new InvalidOperationException($"Marker reported done but file not found: {savePath}");
-            }
+            var mineru = scope.ServiceProvider.GetRequiredService<MinerUClient>();
+            logger.LogInformation("Converting {BookId} via MinerU", job.BookSlug);
+            var markdown = await mineru.ConvertToMarkdownAsync(job.FilePath, ct);
+            await File.WriteAllTextAsync(markdownPath, markdown, ct);
 
             // Persist the outcome even if shutdown was requested — CancellationToken.None.
             await tracker.MarkDoneAsync(job.BookId, CancellationToken.None);
-            logger.LogInformation("Marker extraction done for {BookId}, saved to {Path}", job.BookSlug, savePath);
+            logger.LogInformation("MinerU extraction done for {BookId}, saved to {Path}", job.BookSlug, markdownPath);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -131,7 +128,7 @@ public sealed class IngestionWorker(
         catch (Exception ex)
         {
             await tracker.MarkFailedAsync(job.BookId, ex.Message, CancellationToken.None);
-            logger.LogError(ex, "Marker extraction failed for {BookId}", job.BookSlug);
+            logger.LogError(ex, "MinerU extraction failed for {BookId}", job.BookSlug);
         }
     }
 

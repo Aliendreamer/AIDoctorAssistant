@@ -9,6 +9,7 @@ using MedAssist.AI.VectorStore;
 using MedAssist.Data;
 using MedAssist.Data.Entities;
 using MedAssist.Data.Repositories;
+using MedAssist.Data.Services;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 using MedAssist.Web.Data;
@@ -52,7 +53,7 @@ internal static class ServiceCollectionExtensions
     {
         services.Configure<ModelsOptions>(configuration.GetSection("Models"));
         services.Configure<QdrantOptions>(configuration.GetSection("VectorStore:Qdrant"));
-        services.Configure<MarkerOptions>(configuration.GetSection("Marker"));
+        services.Configure<MinerUOptions>(configuration.GetSection("MinerU"));
 
         services.AddHttpClient<ModelInitializer>((sp, client) =>
         {
@@ -110,24 +111,30 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<IOptions<RagOptions>>().Value,
             sp.GetRequiredService<ILoggerFactory>()));
 
-        services.AddHttpClient("marker", (sp, client) =>
+        // Shared MinerU OCR service (migrate-marker-to-mineru): one synchronous /file_parse call per
+        // PDF, so the client needs a long timeout (the whole OCR runs inside the request).
+        services.AddHttpClient("mineru", (sp, client) =>
         {
-            var opts = sp.GetRequiredService<IOptions<MarkerOptions>>().Value;
-            client.BaseAddress = new Uri(opts.Endpoint);
-            client.Timeout = TimeSpan.FromMinutes(opts.TimeoutMinutes);
+            var opts = sp.GetRequiredService<IOptions<MinerUOptions>>().Value;
+            client.BaseAddress = new Uri(opts.ServiceUrl);
+            client.Timeout = TimeSpan.FromMinutes(opts.ConversionTimeoutMinutes);
         });
-        services.AddTransient<MarkerClient>(sp =>
+        services.AddTransient<MinerUClient>(sp =>
         {
-            var opts = sp.GetRequiredService<IOptions<MarkerOptions>>().Value;
-            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("marker");
-            var logger = sp.GetRequiredService<ILogger<MarkerClient>>();
-            return new MarkerClient(httpClient, opts.UseLlm, logger);
+            var opts = sp.GetRequiredService<IOptions<MinerUOptions>>().Value;
+            var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("mineru");
+            var logger = sp.GetRequiredService<ILogger<MinerUClient>>();
+            return new MinerUClient(httpClient, opts.Backend, opts.Method, logger);
         });
         services.AddTransient<MarkdownChunker>();
         services.AddTransient<ChunkEnricher>();
         services.AddTransient<VocabularyBuilder>();
         services.AddTransient<BookRepository>();
         services.AddTransient<CheckpointRepository>();
+        // Interface views of the ingestion repos so the AI layer (BookIndexer) depends on Shared
+        // abstractions, not the EF repositories directly (audit P2-13).
+        services.AddTransient<IBookRepository>(sp => sp.GetRequiredService<BookRepository>());
+        services.AddTransient<ICheckpointRepository>(sp => sp.GetRequiredService<CheckpointRepository>());
         services.AddTransient<ChatHistoryRepository>();
         services.AddTransient<ExtractionStatusRepository>();
         services.AddTransient<BookIndexer>();

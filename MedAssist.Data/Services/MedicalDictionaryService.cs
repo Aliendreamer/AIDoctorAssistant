@@ -1,10 +1,9 @@
-using MedAssist.Data;
 using MedAssist.Data.Entities;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace MedAssist.AI.Dictionary;
+namespace MedAssist.Data.Services;
 
 public sealed class MedicalDictionaryService(MedAssistDbContext medAssistDbContext) : IMedicalDictionary
 {

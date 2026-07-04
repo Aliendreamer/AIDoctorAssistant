@@ -8,6 +8,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# The cu128 torch install pulls multi-hundred-MB nvidia-* CUDA wheels from pypi.nvidia.com, whose
+# CDN is frequently slow. pip's default 15s socket timeout trips a ReadTimeoutError mid-download, so
+# give every pip invocation a generous per-read timeout and automatic retries.
+ENV PIP_DEFAULT_TIMEOUT=300 \
+    PIP_RETRIES=10
+
 # Install torch first so marker-pdf's resolver doesn't replace it.
 # Stable cu128 (not nightly): torch/torchvision ship as a matched set here, avoiding the
 # nightly date-mismatch resolver conflict. cu128 supports Blackwell (RTX 50xx).

@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.RegularExpressions;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
@@ -13,10 +12,8 @@ public abstract partial class RagPluginBase
 {
     private readonly SKKernel _kernel;
     private readonly IMedicalDictionary _dictionary;
-    private readonly IVectorStore _vectorStore;
-    private readonly IEmbedder _embedder;
-    private readonly ISparseVectorizer _sparseVectorizer;
     private readonly ICrossEncoderReranker _reranker;
+    private readonly CandidateRetriever _retriever;
     private readonly RagOptions _options;
     private readonly ILogger<RagPluginBase> _logger;
 
@@ -43,10 +40,8 @@ public abstract partial class RagPluginBase
     {
         _kernel = kernel;
         _dictionary = dictionary;
-        _vectorStore = vectorStore;
-        _embedder = embedder;
-        _sparseVectorizer = sparseVectorizer;
         _reranker = reranker;
+        _retriever = new CandidateRetriever(embedder, sparseVectorizer, vectorStore);
         _options = options;
         _logger = logger;
     }
@@ -71,8 +66,8 @@ public abstract partial class RagPluginBase
         var initialTerms = searchQuery == query
             ? (IReadOnlyList<string>)[query]
             : [query, searchQuery];
-        var candidates = await GatherCandidatesAsync(initialTerms, langFilter, bookIds, topK: 5, cancellationToken);
-        candidates = await ExpandBySectionAsync(candidates, cancellationToken);
+        var candidates = await _retriever.GatherAsync(initialTerms, langFilter, bookIds, topK: 5, cancellationToken);
+        candidates = await _retriever.ExpandBySectionAsync(candidates, cancellationToken);
 
         if (candidates.Count == 0)
         {
@@ -102,8 +97,8 @@ public abstract partial class RagPluginBase
             var iterLang = strategy.AnyLanguage ? LanguageFilter.Both : langFilter;
             var iterTerms = SelectTerms(expandedTerms, strategy);
 
-            var newChunks = await GatherCandidatesAsync(iterTerms, iterLang, bookIds, strategy.TopK, cancellationToken);
-            newChunks = await ExpandBySectionAsync(newChunks, cancellationToken);
+            var newChunks = await _retriever.GatherAsync(iterTerms, iterLang, bookIds, strategy.TopK, cancellationToken);
+            newChunks = await _retriever.ExpandBySectionAsync(newChunks, cancellationToken);
             if (newChunks.Count == 0)
             {
                 continue;
@@ -152,57 +147,6 @@ public abstract partial class RagPluginBase
             .ToList();
 
         return await BuildResultAsync(query, topChunks, books, conversationHistory, cancellationToken);
-    }
-
-    private async Task<List<MedicalChunk>> GatherCandidatesAsync(
-        IReadOnlyList<string> terms,
-        LanguageFilter langFilter,
-        string[]? bookIds,
-        int topK,
-        CancellationToken cancellationToken)
-    {
-        var chunks = new List<MedicalChunk>();
-        foreach (var term in terms)
-        {
-            var denseVector = await _embedder.EmbedQueryAsync(term, cancellationToken);
-            var sparseVector = await _sparseVectorizer.VectorizeQueryAsync(term, cancellationToken);
-            var results = await _vectorStore.SearchAsync(denseVector, sparseVector, langFilter, bookIds, topK, cancellationToken);
-            chunks.AddRange(results);
-        }
-
-        return chunks;
-    }
-
-    // For each unique (chapter, section, bookId) in the candidate pool — including
-    // summary chunks which act as retrieval triggers — fetch all regular chunks from
-    // that section and merge them into the pool.
-    private async Task<List<MedicalChunk>> ExpandBySectionAsync(
-        List<MedicalChunk> candidates,
-        CancellationToken cancellationToken)
-    {
-        var sections = candidates
-            .Where(c => c.IsSummary && !string.IsNullOrEmpty(c.SectionTitle))
-            .Select(c => (c.ChapterTitle, c.SectionTitle, c.BookId))
-            .Distinct()
-            .ToList();
-
-        if (sections.Count == 0)
-        {
-            return candidates;
-        }
-
-        var expanded = new List<MedicalChunk>(candidates);
-        foreach (var (chapter, section, bookId) in sections)
-        {
-            var sectionChunks = await _vectorStore.ScrollSectionAsync(chapter, section, bookId, limit: 50, cancellationToken);
-            expanded.AddRange(sectionChunks);
-        }
-
-        // Deduplicate by BookId:ChunkIndex; summaries from search stay in pool
-        // until the final filter in ExecuteSearchAsync removes them from the answer.
-        return expanded
-            .DistinctBy(c => $"{c.BookId}:{c.ChunkIndex}")
-            .ToList();
     }
 
     private static IReadOnlyList<string> SelectTerms(IReadOnlyList<string> expandedTerms, RetryStrategy strategy)
@@ -285,11 +229,13 @@ public abstract partial class RagPluginBase
             ? "ВАЖНО: Отговорът трябва да е изцяло на български език. Не използвай никакъв друг език.\n\n"
             : "IMPORTANT: Respond entirely in English.\n\n";
 
-        history.AddUserMessage($"{languageInstruction}Question: {query}\n\nMedical excerpts:\n\n{context}");
+        // /no_think: reasoning models (qwen3) otherwise prepend a long <think> block — we want prose
+        // only, and skipping the reasoning also cuts latency. Harmless for non-reasoning models.
+        history.AddUserMessage($"{languageInstruction}Question: {query}\n\nMedical excerpts:\n\n{context}\n\n/no_think");
 
         var chat = _kernel.GetRequiredService<IChatCompletionService>();
         var response = await chat.GetChatMessageContentAsync(history, cancellationToken: cancellationToken);
-        var answer = StripMarkdown(response.Content ?? "Unable to generate a response.");
+        var answer = MarkdownStripper.Strip(response.Content ?? "Unable to generate a response.");
 
         return new QueryResult { Answer = answer, Sources = sources };
     }
@@ -338,35 +284,15 @@ public abstract partial class RagPluginBase
             "IMPORTANT: Keep the rewritten query in the exact same language as the follow-up question. " +
             "Output ONLY the rewritten query — no explanation, no quotes.");
         rewriteHistory.AddUserMessage(
-            $"Previous question: {lastUser}\n\nFollow-up: {query}\n\nRewritten query:");
+            $"Previous question: {lastUser}\n\nFollow-up: {query}\n\nRewritten query:\n\n/no_think");
 
         var chat = _kernel.GetRequiredService<IChatCompletionService>();
         var response = await chat.GetChatMessageContentAsync(rewriteHistory, cancellationToken: cancellationToken);
-        var rewritten = response.Content?.Trim();
+        // Strip any reasoning block so a qwen3 <think>…</think> can't leak into the search query.
+        var rewritten = MarkdownStripper.Strip(response.Content ?? string.Empty);
 
         _logger.LogDebug("Query rewrite: '{Original}' → '{Rewritten}'", query, rewritten);
         return string.IsNullOrWhiteSpace(rewritten) ? query : rewritten;
-    }
-
-    [GeneratedRegex(@"^#{1,6}\s+", RegexOptions.Multiline)]
-    private static partial Regex MarkdownHeadingRegex();
-    [GeneratedRegex(@"\*\*(.+?)\*\*", RegexOptions.Singleline)]
-    private static partial Regex MarkdownBoldRegex();
-    [GeneratedRegex(@"\*(.+?)\*", RegexOptions.Singleline)]
-    private static partial Regex MarkdownItalicRegex();
-    [GeneratedRegex(@"^[ \t]*[-*]\s+", RegexOptions.Multiline)]
-    private static partial Regex MarkdownBulletRegex();
-    [GeneratedRegex(@"^[ \t]*\d+\.\s+", RegexOptions.Multiline)]
-    private static partial Regex MarkdownNumberedRegex();
-
-    private static string StripMarkdown(string text)
-    {
-        text = MarkdownHeadingRegex().Replace(text, "");   // ## Title → Title
-        text = MarkdownBoldRegex().Replace(text, "$1");     // **text** → text
-        text = MarkdownItalicRegex().Replace(text, "$1");   // *text* → text
-        text = MarkdownBulletRegex().Replace(text, "");     // "- item" → "item"
-        text = MarkdownNumberedRegex().Replace(text, "");   // "1. item" → "item"
-        return text.Trim();
     }
 
     protected virtual string GetSystemPrompt() =>
