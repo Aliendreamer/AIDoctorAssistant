@@ -58,7 +58,7 @@ public sealed class BookRepository(MedAssistDbContext db) : IBookRepository
 
     public async Task<IReadOnlyList<BookInfo>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await db.Books.ToListAsync(cancellationToken);
+        var entities = await db.Books.AsNoTracking().ToListAsync(cancellationToken);
         return entities.Select(MapToInfo).ToList();
     }
 
@@ -70,7 +70,7 @@ public sealed class BookRepository(MedAssistDbContext db) : IBookRepository
 
     public async Task<BookInfo?> GetByBookIdAsync(string bookId, CancellationToken cancellationToken = default)
     {
-        var entity = await db.Books.FirstOrDefaultAsync(b => b.BookId == bookId, cancellationToken);
+        var entity = await db.Books.AsNoTracking().FirstOrDefaultAsync(b => b.BookId == bookId, cancellationToken);
         return entity is null ? null : MapToInfo(entity);
     }
 

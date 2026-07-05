@@ -62,7 +62,7 @@ internal sealed class CandidateRetriever(
         }
 
         return expanded
-            .DistinctBy(c => $"{c.BookId}:{c.ChunkIndex}")
+            .DistinctBy(c => (c.BookId, c.ChunkIndex))
             .ToList();
     }
 }

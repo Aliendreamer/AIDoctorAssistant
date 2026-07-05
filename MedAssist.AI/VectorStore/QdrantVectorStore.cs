@@ -11,6 +11,7 @@ public sealed class QdrantVectorStore : IVectorStore
 {
     private readonly QdrantClient _client;
     private const ulong _vectorSize = 1024;
+    private bool _payloadIndexesEnsured;
 
     public QdrantVectorStore(QdrantClient client) => _client = client;
 
@@ -301,6 +302,7 @@ public sealed class QdrantVectorStore : IVectorStore
     {
         if (await _client.CollectionExistsAsync(VectorStoreConstants.CollectionName, cancellationToken))
         {
+            await EnsurePayloadIndexesAsync(cancellationToken);
             return;
         }
 
@@ -322,5 +324,38 @@ public sealed class QdrantVectorStore : IVectorStore
             vectorsMap,
             sparseVectorsConfig: sparseConfig,
             cancellationToken: cancellationToken);
+
+        await EnsurePayloadIndexesAsync(cancellationToken);
+    }
+
+    // Filtered vector search and the pure-filter ScrollSectionAsync scan the collection unless the
+    // filtered payload fields are indexed. Keyword indexes on the fields used in Must/Should filters
+    // + a bool index on IsSummary. Idempotent (creating an existing index is a no-op in Qdrant) and
+    // gated to run once per process, so it also back-fills indexes on a pre-existing collection.
+    private async Task EnsurePayloadIndexesAsync(CancellationToken cancellationToken)
+    {
+        if (_payloadIndexesEnsured)
+        {
+            return;
+        }
+
+        foreach (var field in new[]
+        {
+            VectorStoreConstants.Payload.BookId,
+            VectorStoreConstants.Payload.Language,
+            VectorStoreConstants.Payload.ChapterTitle,
+            VectorStoreConstants.Payload.SectionTitle,
+        })
+        {
+            await _client.CreatePayloadIndexAsync(
+                VectorStoreConstants.CollectionName, field, PayloadSchemaType.Keyword,
+                cancellationToken: cancellationToken);
+        }
+
+        await _client.CreatePayloadIndexAsync(
+            VectorStoreConstants.CollectionName, VectorStoreConstants.Payload.IsSummary, PayloadSchemaType.Bool,
+            cancellationToken: cancellationToken);
+
+        _payloadIndexesEnsured = true;
     }
 }

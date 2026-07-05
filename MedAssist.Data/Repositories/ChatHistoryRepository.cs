@@ -12,6 +12,7 @@ public sealed class ChatHistoryRepository(MedAssistDbContext db)
         // (a user + assistant pair written together share CreatedAt) — audit P3-8. Id is the
         // insertion sequence, so this needs no separate sequence column.
         return await db.ChatMessages
+            .AsNoTracking()
             .Where(m => m.UserId == userId && m.QueryType == queryType)
             .OrderByDescending(m => m.CreatedAt).ThenByDescending(m => m.Id)
             .Take(limit)

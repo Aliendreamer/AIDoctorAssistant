@@ -9,6 +9,7 @@ public sealed class BookCatalogService(MedAssistDbContext db)
     public async Task<IReadOnlyList<BookInfo>> GetAllBooksAsync(CancellationToken cancellationToken = default)
     {
         var books = await db.Books
+            .AsNoTracking()
             .Where(b => b.Status == BookStatus.Indexed)
             .OrderBy(b => b.Title)
             .ToListAsync(cancellationToken);

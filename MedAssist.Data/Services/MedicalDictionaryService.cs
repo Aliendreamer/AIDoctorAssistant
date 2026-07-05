@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using MedAssist.Data.Entities;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
@@ -24,6 +25,7 @@ public sealed class MedicalDictionaryService(MedAssistDbContext medAssistDbConte
         // (audit P2-17). Contains(...) translates to a SQL IN (...).
         var termLowers = terms.Select(t => t.ToLowerInvariant()).ToHashSet();
         var matches = await _medAssistDbContext.Illnesses
+            .AsNoTracking()
             .Include(i => i.Aliases)
             .Where(i =>
                 termLowers.Contains(i.NameEn.ToLower()) ||
@@ -44,13 +46,14 @@ public sealed class MedicalDictionaryService(MedAssistDbContext medAssistDbConte
         return [.. terms];
     }
 
-    private static readonly HashSet<string> _stopwords = new(StringComparer.OrdinalIgnoreCase)
+    // FrozenSet: built once, read-only, optimized for fast repeated Contains lookups (.NET 8+).
+    private static readonly FrozenSet<string> _stopwords = new[]
     {
         "на", "е", "и", "с", "в", "от", "до", "се", "за", "при", "са", "ли",
         "да", "не", "то", "ще", "или", "но", "само", "те", "тя", "си",
         "болест", "заболяване", "симптом", "признак",
         "the", "a", "an", "of", "and", "or", "is", "are", "was", "what", "which", "how"
-    };
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static IEnumerable<string> ExtractKeywords(string query)
         => query.Split([' ', ',', '.', '?', '!', '-', '(', ')'], StringSplitOptions.RemoveEmptyEntries)
@@ -62,6 +65,7 @@ public sealed class MedicalDictionaryService(MedAssistDbContext medAssistDbConte
         var icdUpper = icdCode.ToUpperInvariant();
 
         var illness = await _medAssistDbContext.Illnesses
+            .AsNoTracking()
             .Include(i => i.Aliases)
             .FirstOrDefaultAsync(i => i.IcdCode.ToUpper() == icdUpper, cancellationToken);
 
@@ -74,6 +78,7 @@ public sealed class MedicalDictionaryService(MedAssistDbContext medAssistDbConte
         var queryUpper = query.ToUpperInvariant();
 
         var illnesses = await _medAssistDbContext.Illnesses
+            .AsNoTracking()
             .Include(i => i.Aliases)
             .Where(i =>
                 i.NameEn.ToLower().Contains(queryLower) ||
@@ -89,6 +94,7 @@ public sealed class MedicalDictionaryService(MedAssistDbContext medAssistDbConte
     public async Task<IReadOnlyList<IllnessEntry>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var illnesses = await _medAssistDbContext.Illnesses
+            .AsNoTracking()
             .Include(i => i.Aliases)
             .OrderBy(i => i.NameEn)
             .ToListAsync(cancellationToken);

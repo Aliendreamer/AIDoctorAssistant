@@ -10,6 +10,7 @@ public sealed class UserRepository(MedAssistDbContext db, IPasswordHasher<UserEn
     public async Task<UserEntity?> FindByUsernameAsync(string username, CancellationToken ct = default)
     {
         return await db.Users
+            .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower(), ct);
     }
 
@@ -17,7 +18,7 @@ public sealed class UserRepository(MedAssistDbContext db, IPasswordHasher<UserEn
     {
         // Order client-side: the users table is tiny and admin-only, and SQLite (the test provider)
         // cannot ORDER BY a DateTimeOffset — sorting in memory is identical on both providers.
-        var users = await db.Users.ToListAsync(ct);
+        var users = await db.Users.AsNoTracking().ToListAsync(ct);
         return users.OrderBy(u => u.CreatedAt).ToList();
     }
 

@@ -106,7 +106,7 @@ public abstract partial class RagPluginBase
 
             candidates = candidates
                 .Concat(newChunks)
-                .DistinctBy(c => $"{c.BookId}:{c.ChunkIndex}")
+                .DistinctBy(c => (c.BookId, c.ChunkIndex))
                 .ToList();
 
             scored = await _reranker.RerankAsync(searchQuery, candidates, cancellationToken);
