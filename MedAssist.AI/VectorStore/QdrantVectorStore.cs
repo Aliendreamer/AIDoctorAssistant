@@ -11,7 +11,7 @@ public sealed class QdrantVectorStore : IVectorStore
 {
     private readonly QdrantClient _client;
     private const ulong _vectorSize = 1024;
-    private bool _payloadIndexesEnsured;
+    private bool _collectionTuned;
 
     public QdrantVectorStore(QdrantClient client) => _client = client;
 
@@ -103,6 +103,7 @@ public sealed class QdrantVectorStore : IVectorStore
             limit: (ulong)topK,
             vectorName: VectorStoreConstants.Vectors.Dense,
             payloadSelector: new WithPayloadSelector { Enable = true },
+            searchParams: RescoreParams(),
             cancellationToken: cancellationToken);
 
         return results.Select(MapToChunk).ToList();
@@ -219,7 +220,8 @@ public sealed class QdrantVectorStore : IVectorStore
                 Query = new Query { Nearest = denseInput },
                 Using = VectorStoreConstants.Vectors.Dense,
                 Limit = prefetchLimit,
-                Filter = filter
+                Filter = filter,
+                Params = RescoreParams()
             },
             new()
             {
@@ -317,7 +319,7 @@ public sealed class QdrantVectorStore : IVectorStore
     {
         if (await _client.CollectionExistsAsync(VectorStoreConstants.CollectionName, cancellationToken))
         {
-            await EnsurePayloadIndexesAsync(cancellationToken);
+            await EnsureCollectionTuningAsync(collectionCreated: false, cancellationToken);
             return;
         }
 
@@ -325,7 +327,11 @@ public sealed class QdrantVectorStore : IVectorStore
         vectorsMap.Map.Add(VectorStoreConstants.Vectors.Dense, new VectorParams
         {
             Size = _vectorSize,
-            Distance = Distance.Cosine
+            Distance = Distance.Cosine,
+            // Keep the full-precision vectors on disk; only the compact int8 quantization codes stay
+            // hot in RAM. This is what actually reduces memory at scale — originals are read only to
+            // rescore the top candidates.
+            OnDisk = true,
         });
 
         var sparseConfig = new SparseVectorConfig();
@@ -338,18 +344,39 @@ public sealed class QdrantVectorStore : IVectorStore
             VectorStoreConstants.CollectionName,
             vectorsMap,
             sparseVectorsConfig: sparseConfig,
+            quantizationConfig: BuildQuantizationConfig(),
             cancellationToken: cancellationToken);
 
-        await EnsurePayloadIndexesAsync(cancellationToken);
+        await EnsureCollectionTuningAsync(collectionCreated: true, cancellationToken);
     }
 
-    // Filtered vector search and the pure-filter ScrollSectionAsync scan the collection unless the
-    // filtered payload fields are indexed. Keyword indexes on the fields used in Must/Should filters
-    // + a bool index on IsSummary. Idempotent (creating an existing index is a no-op in Qdrant) and
-    // gated to run once per process, so it also back-fills indexes on a pre-existing collection.
-    private async Task EnsurePayloadIndexesAsync(CancellationToken cancellationToken)
+    // int8 scalar quantization of the dense vectors: ~4x smaller vector index in RAM, scaling to a
+    // large corpus. AlwaysRam keeps the compact codes hot for fast search; the full-precision
+    // vectors are retained so search-time rescoring (see RescoreParams) re-ranks the top candidates
+    // exactly, keeping retrieval accuracy near float32.
+    private static QuantizationConfig BuildQuantizationConfig() => new()
     {
-        if (_payloadIndexesEnsured)
+        Scalar = new ScalarQuantization
+        {
+            Type = QuantizationType.Int8,
+            Quantile = 0.99f,
+            AlwaysRam = true,
+        }
+    };
+
+    // Rescore the oversampled quantized candidates with the original float32 vectors so the final
+    // ranking is exact despite the int8 index.
+    private static SearchParams RescoreParams() => new()
+    {
+        Quantization = new QuantizationSearchParams { Rescore = true, Oversampling = 2.0 }
+    };
+
+    // Runs once per process: (1) payload indexes so filtered search / the pure-filter ScrollSection
+    // use an index instead of scanning; (2) for a pre-existing collection, apply quantization it may
+    // not have yet. Both are idempotent. New collections already got quantization at creation.
+    private async Task EnsureCollectionTuningAsync(bool collectionCreated, CancellationToken cancellationToken)
+    {
+        if (_collectionTuned)
         {
             return;
         }
@@ -371,6 +398,28 @@ public sealed class QdrantVectorStore : IVectorStore
             VectorStoreConstants.CollectionName, VectorStoreConstants.Payload.IsSummary, PayloadSchemaType.Bool,
             cancellationToken: cancellationToken);
 
-        _payloadIndexesEnsured = true;
+        if (!collectionCreated)
+        {
+            // Back-fill quantization + on-disk originals onto a collection created before they were
+            // configured (Qdrant re-quantizes / moves vectors in the background).
+            var denseDiff = new VectorParamsDiffMap();
+            denseDiff.Map.Add(VectorStoreConstants.Vectors.Dense, new VectorParamsDiff { OnDisk = true });
+
+            await _client.UpdateCollectionAsync(
+                VectorStoreConstants.CollectionName,
+                vectorsConfig: denseDiff,
+                quantizationConfig: new QuantizationConfigDiff
+                {
+                    Scalar = new ScalarQuantization
+                    {
+                        Type = QuantizationType.Int8,
+                        Quantile = 0.99f,
+                        AlwaysRam = true,
+                    }
+                },
+                cancellationToken: cancellationToken);
+        }
+
+        _collectionTuned = true;
     }
 }
