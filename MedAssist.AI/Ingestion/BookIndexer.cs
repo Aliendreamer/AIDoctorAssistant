@@ -95,7 +95,10 @@ public sealed class BookIndexer
         var indexed = checkpoint?.IndexedChunks ?? 0;
 
         // Pass B — embed (dense) + vectorize (sparse, now non-empty) + upsert, resumable from the
-        // checkpoint.
+        // checkpoint. Points are accumulated and upserted in a batch at each checkpoint boundary
+        // (one Qdrant round-trip per batch instead of per chunk); deterministic ids keep re-upsert
+        // on resume idempotent.
+        var batch = new List<ChunkVector>(_checkpointInterval);
         for (var i = resumeFromIndex; i < allChunks.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -121,17 +124,24 @@ public sealed class BookIndexer
 
             var denseVector = await _embedder.EmbedPassageAsync(text, cancellationToken);
             var sparseVector = await _sparseVectorizer.VectorizePassageAsync(text, cancellationToken);
-            await _vectorStore.UpsertAsync(chunk, denseVector, sparseVector, cancellationToken);
+            batch.Add(new ChunkVector(chunk, denseVector, sparseVector));
             _chunksIndexed.Add(1);
             indexed++;
 
             if (indexed % _checkpointInterval == 0)
             {
+                // Flush the batch to Qdrant before checkpointing so the checkpoint never claims more
+                // progress than has actually been persisted.
+                await _vectorStore.UpsertBatchAsync(batch, cancellationToken);
+                batch.Clear();
                 await _checkpointRepo.UpsertAsync(new IngestionCheckpoint(
                     bookId, allChunks.Count, indexed, i, BookStatus.InProgress, DateTimeOffset.UtcNow), cancellationToken);
                 _logger.LogInformation("Checkpoint saved: {Indexed}/{Total} chunks", indexed, allChunks.Count);
             }
         }
+
+        // Flush the final partial batch (no-op if empty) before marking the book Indexed.
+        await _vectorStore.UpsertBatchAsync(batch, cancellationToken);
 
         await _checkpointRepo.UpsertAsync(new IngestionCheckpoint(
             bookId, allChunks.Count, allChunks.Count, allChunks.Count - 1, BookStatus.Indexed, DateTimeOffset.UtcNow), cancellationToken);
@@ -202,6 +212,7 @@ public sealed class BookIndexer
             .Where(g => !string.IsNullOrWhiteSpace(g.Key));
 
         var summaryIndex = allChunks.Count;
+        var batch = new List<ChunkVector>();
         foreach (var group in groups)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -228,9 +239,16 @@ public sealed class BookIndexer
 
             var denseVector = await _embedder.EmbedPassageAsync(summaryText, cancellationToken);
             var sparseVector = await _sparseVectorizer.VectorizePassageAsync(summaryText, cancellationToken);
-            await _vectorStore.UpsertAsync(chunk, denseVector, sparseVector, cancellationToken);
+            batch.Add(new ChunkVector(chunk, denseVector, sparseVector));
+
+            if (batch.Count >= _checkpointInterval)
+            {
+                await _vectorStore.UpsertBatchAsync(batch, cancellationToken);
+                batch.Clear();
+            }
         }
 
+        await _vectorStore.UpsertBatchAsync(batch, cancellationToken);
         _logger.LogInformation("Section summaries indexed for {BookId}", bookId);
     }
 }

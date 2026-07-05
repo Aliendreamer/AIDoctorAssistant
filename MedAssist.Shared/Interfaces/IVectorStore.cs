@@ -10,6 +10,18 @@ public interface IVectorStore
         SparseVector sparseVector,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Upserts many points in a single request. The default falls back to per-point
+    /// <see cref="UpsertAsync"/>; a real store (Qdrant) overrides it to batch the round-trip.
+    /// </summary>
+    async Task UpsertBatchAsync(IReadOnlyList<ChunkVector> items, CancellationToken cancellationToken = default)
+    {
+        foreach (var item in items)
+        {
+            await UpsertAsync(item.Chunk, item.DenseVector, item.SparseVector, cancellationToken);
+        }
+    }
+
     Task<IReadOnlyList<MedicalChunk>> SearchAsync(
         float[] denseQueryVector,
         SparseVector? sparseQueryVector,

@@ -22,7 +22,24 @@ public sealed class QdrantVectorStore : IVectorStore
         CancellationToken cancellationToken = default)
     {
         await EnsureCollectionExistsAsync(cancellationToken);
+        var point = BuildPoint(chunk, denseVector, sparseVector);
+        await _client.UpsertAsync(VectorStoreConstants.CollectionName, [point], cancellationToken: cancellationToken);
+    }
 
+    public async Task UpsertBatchAsync(IReadOnlyList<ChunkVector> items, CancellationToken cancellationToken = default)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        await EnsureCollectionExistsAsync(cancellationToken);
+        var points = items.Select(i => BuildPoint(i.Chunk, i.DenseVector, i.SparseVector)).ToList();
+        await _client.UpsertAsync(VectorStoreConstants.CollectionName, points, cancellationToken: cancellationToken);
+    }
+
+    private static PointStruct BuildPoint(MedicalChunk chunk, float[] denseVector, DomainSparseVector sparseVector)
+    {
         var namedVectors = new NamedVectors();
 
         var denseVec = new Vector { Dense = new DenseVector() };
@@ -41,7 +58,7 @@ public sealed class QdrantVectorStore : IVectorStore
         // Deterministic id from the chunk's identity so re-indexing overwrites instead of
         // appending duplicate points (audit P1-6). Summaries get a distinct key namespace.
         var pointKey = $"{(chunk.IsSummary ? "summary:" : string.Empty)}{chunk.BookId}:{chunk.ChunkIndex}";
-        var point = new PointStruct
+        return new PointStruct
         {
             Id = new PointId { Uuid = DeterministicGuid.Create(pointKey).ToString() },
             Vectors = new Vectors { Vectors_ = namedVectors },
@@ -62,8 +79,6 @@ public sealed class QdrantVectorStore : IVectorStore
                 [VectorStoreConstants.Payload.IsSummary] = chunk.IsSummary,
             }
         };
-
-        await _client.UpsertAsync(VectorStoreConstants.CollectionName, [point], cancellationToken: cancellationToken);
     }
 
     public async Task<IReadOnlyList<MedicalChunk>> SearchAsync(
