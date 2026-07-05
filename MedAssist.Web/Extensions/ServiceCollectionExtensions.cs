@@ -65,7 +65,7 @@ internal static class ServiceCollectionExtensions
         {
             var opts = sp.GetRequiredService<IOptions<ModelsOptions>>().Value;
             var modelDir = Path.Combine(opts.Path, "multilingual-e5-large");
-            return new MultilingualE5Embedder(modelDir);
+            return new MultilingualE5Embedder(modelDir, opts.OnnxIntraOpNumThreads);
         });
 
         services.AddSingleton(sp =>
@@ -85,7 +85,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<ICrossEncoderReranker>(sp =>
         {
             var opts = sp.GetRequiredService<IOptions<ModelsOptions>>().Value;
-            return new CrossEncoderReranker(opts.RerankerPath);
+            return new CrossEncoderReranker(opts.RerankerPath, opts.OnnxIntraOpNumThreads);
         });
 
         // Ollama chat client — a bounded timeout so a hung/slow Ollama can't block a request forever

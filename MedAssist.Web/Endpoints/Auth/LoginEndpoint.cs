@@ -21,6 +21,9 @@ public sealed class LoginEndpoint : Endpoint<LoginRequest, LoginResponse>
     {
         Post("/api/auth/login");
         AllowAnonymous();
+        // Rate-limit login attempts to blunt password brute-forcing (audit P2-6). Keyed on the
+        // X-Forwarded-For client set by the internal HTTPS proxy: 5 attempts per minute per client.
+        Throttle(hitLimit: 5, durationSeconds: 60);
     }
 
     public override async Task HandleAsync(LoginRequest req, CancellationToken ct)

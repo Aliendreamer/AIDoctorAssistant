@@ -174,7 +174,7 @@
     {
         if (_history.Count > 0)
         {
-            await JS.InvokeVoidAsync("eval", "var c=document.getElementById('chat-container');if(c)c.scrollTop=c.scrollHeight;");
+            await JS.InvokeVoidAsync("medassist.scrollToBottom", "chat-container");
         }
     }
 

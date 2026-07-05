@@ -8,7 +8,8 @@ public sealed class LogoutEndpoint : EndpointWithoutRequest
 {
     public override void Configure()
     {
-        Get("/logout");
+        // POST (not GET) so a cross-site <img>/link/prefetch can't trigger a logout (audit P3-5).
+        Post("/logout");
         AllowAnonymous();
     }
 

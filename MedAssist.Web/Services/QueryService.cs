@@ -33,8 +33,10 @@ public sealed partial class QueryService
     private static readonly Meter _meter = new("MedAssist.Web");
     private static readonly Histogram<double> _queryDuration = _meter.CreateHistogram<double>(
         "query_duration_seconds", unit: "s", description: "Query duration by plugin type");
-    private static readonly Counter<long> _qdrantResults = _meter.CreateCounter<long>(
-        "qdrant_results_total", description: "Total Qdrant results returned");
+    // Counts the book citations returned in answers (not raw Qdrant hits) — renamed from the
+    // misleading "qdrant_results_total" (audit P2-21). No dashboard referenced the old name.
+    private static readonly Counter<long> _bookSourcesReturned = _meter.CreateCounter<long>(
+        "rag_book_sources_total", description: "Total book sources cited in query answers");
 
     public QueryService(Kernel kernel, BookCatalogService bookCatalog, HttpClient httpClient, IConfiguration configuration, ChatHistoryRepository chatHistory, ILogger<QueryService> logger)
     {
@@ -91,7 +93,7 @@ public sealed partial class QueryService
                 _ => throw new ArgumentOutOfRangeException(nameof(request.QueryType))
             };
 
-            _qdrantResults.Add(result.Sources.Count(s => s.SourceType == SourceType.Book));
+            _bookSourcesReturned.Add(result.Sources.Count(s => s.SourceType == SourceType.Book));
 
             if (userId is not null)
             {

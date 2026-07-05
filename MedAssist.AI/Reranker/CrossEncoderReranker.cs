@@ -14,13 +14,25 @@ public sealed class CrossEncoderReranker : ICrossEncoderReranker, IDisposable
     private readonly SemaphoreSlim _inferenceGate = new(Environment.ProcessorCount, Environment.ProcessorCount);
     private const int _maxTokens = 512;
 
-    public CrossEncoderReranker(string modelDirectory)
+    public CrossEncoderReranker(string modelDirectory, int intraOpNumThreads = 0)
     {
         var modelPath = Path.Combine(modelDirectory, OnnxConstants.Files.ModelOnnx);
         var vocabPath = Path.Combine(modelDirectory, OnnxConstants.Files.VocabTxt);
 
-        _session = new InferenceSession(modelPath, new SessionOptions());
+        _session = new InferenceSession(modelPath, BuildSessionOptions(intraOpNumThreads));
         _tokenizer = BertTokenizer.Create(vocabPath);
+    }
+
+    // intraOpNumThreads 0 = ONNX Runtime default (all cores); a positive value caps intra-op
+    // parallelism to reduce core contention under concurrent inference (audit P2-20).
+    private static SessionOptions BuildSessionOptions(int intraOpNumThreads)
+    {
+        var options = new SessionOptions();
+        if (intraOpNumThreads > 0)
+        {
+            options.IntraOpNumThreads = intraOpNumThreads;
+        }
+        return options;
     }
 
     public async Task<IReadOnlyList<ScoredChunk>> RerankAsync(
