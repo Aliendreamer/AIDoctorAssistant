@@ -1,0 +1,60 @@
+- article [ref=f2e27]:
+  - generic [ref=f2e69]:
+    - generic [ref=f2e70]:
+      - generic [ref=f2e71]:
+        - combobox [ref=f2e72]:
+          - option "Global Search" [selected]
+          - option "Disease Info"
+          - option "Symptoms"
+          - option "Treatment"
+          - option "Differential Diagnosis"
+        - combobox [ref=f2e73]:
+          - option "EN + BG" [selected]
+          - option "English only"
+          - option "Bulgarian only"
+        - generic [ref=f2e74] [cursor=pointer]:
+          - checkbox "PubMed fallback" [ref=f2e75]
+          - text: PubMed fallback
+        - button "Clear history" [ref=f2e76] [cursor=pointer]
+      - generic [ref=f2e77]:
+        - generic [ref=f2e78] [cursor=pointer]:
+          - text: Основи на патофизиологията
+          - generic [ref=f2e79]: bg
+        - generic [ref=f2e80] [cursor=pointer]:
+          - text: Основи на педиатрията
+          - generic [ref=f2e81]: bg
+        - generic [ref=f2e82] [cursor=pointer]:
+          - text: Отравяния и злополуки в детската възраст
+          - generic [ref=f2e83]: bg
+        - generic [ref=f2e84] [cursor=pointer]:
+          - text: Педиатрия (Варна)
+          - generic [ref=f2e85]: bg
+        - generic "Литвиненко" [ref=f2e86] [cursor=pointer]:
+          - text: Педиатрия (Литвиненко)
+          - generic [ref=f2e87]: bg
+        - generic "Tom Lissauer, Will Carroll" [ref=f2e88] [cursor=pointer]:
+          - text: Педиатрия — илюстрован учебник
+          - generic [ref=f2e89]: bg
+        - generic [ref=f2e90] [cursor=pointer]:
+          - text: Практическа педиатрия
+          - generic [ref=f2e91]: bg
+        - generic [ref=f2e92] [cursor=pointer]:
+          - text: Спешна педиатрия
+          - generic [ref=f2e93]: bg
+        - generic "Бойкинов, Шмилев" [ref=f2e94] [cursor=pointer]:
+          - text: Спешна педиатрия (Бойкинов, Шмилев)
+          - generic [ref=f2e95]: bg
+        - generic [ref=f2e96] [cursor=pointer]:
+          - text: Спешна педиатрия — гастроентерология
+          - generic [ref=f2e97]: bg
+    - generic [ref=f2e98]:
+      - generic [ref=f2e99]:
+        - generic [ref=f2e101]: You
+        - generic [ref=f2e102]: What are common causes of fever in children?
+      - generic [ref=f2e103]:
+        - generic [ref=f2e105]: MedAssist
+        - generic [ref=f2e106]: The indexed books don't contain sufficiently relevant information to answer this question. Try rephrasing or consult an external source.
+    - generic [ref=f2e107]:
+      - textbox "Ask a medical question… (Enter to send, Shift+Enter for new line)" [active] [ref=f2e108]: Какви са причините за треска при децата?
+      - button [disabled] [ref=f2e109]:
+        - status [ref=f2e110]

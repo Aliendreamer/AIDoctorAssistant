@@ -176,9 +176,15 @@ internal static class ServiceCollectionExtensions
 
         services.AddRequestTimeouts(options =>
         {
+            // Default covers all endpoints. It's generous (3 min) because a RAG query runs the
+            // reranker + one or two local-Ollama LLM generations over the retrieved book context,
+            // which legitimately exceeds a tight timeout. Per-endpoint [RequestTimeout(...)] named
+            // policies are NOT reliably applied here — FastEndpoints resolves its route inside
+            // UseFastEndpoints(), after UseRequestTimeouts() runs, so the middleware only ever sees
+            // the default policy. Keeping the ceiling on the default keeps it simple and correct.
             options.DefaultPolicy = new Microsoft.AspNetCore.Http.Timeouts.RequestTimeoutPolicy
             {
-                Timeout = TimeSpan.FromSeconds(30)
+                Timeout = TimeSpan.FromMinutes(3)
             };
             options.AddPolicy("upload", new Microsoft.AspNetCore.Http.Timeouts.RequestTimeoutPolicy
             {

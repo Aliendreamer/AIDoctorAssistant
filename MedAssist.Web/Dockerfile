@@ -15,7 +15,7 @@ COPY MedAssist.Shared/ MedAssist.Shared/
 COPY MedAssist.Data/ MedAssist.Data/
 COPY MedAssist.AI/ MedAssist.AI/
 COPY MedAssist.Web/ MedAssist.Web/
-RUN dotnet publish MedAssist.Web/MedAssist.Web.csproj -c Release -o /app/publish --no-restore
+RUN dotnet publish MedAssist.Web/MedAssist.Web.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
