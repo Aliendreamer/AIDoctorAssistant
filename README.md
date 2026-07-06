@@ -112,6 +112,42 @@ The app reaches the shared services by container name over the external
 > The app also can't `depends_on` cross-stack services, so PCC must be healthy before the app runs.
 > The `medassist` database is created automatically on first run by EF Core migrations.
 
+## Shared ONNX model cache
+
+The ONNX models (embedder `multilingual-e5-large` ~2.2 GB, cross-encoder reranker
+`ms-marco-MiniLM-L-6-v2` ~90 MB) are downloaded from HuggingFace on first run into the **external**
+Docker volume `shared_onnx_models`, mounted at `/models`. The sibling **DndMcpAICsharpFun** stack
+mounts the *same* volume, so the reranker (identical in both projects) is fetched once and reused.
+Layout is one subdirectory per model:
+
+```text
+shared_onnx_models/
+  multilingual-e5-large/      # MedAssist embedder only
+  ms-marco-MiniLM-L-6-v2/     # shared reranker (model.onnx + vocab.txt)
+```
+
+Because it's an external volume, compose does **not** auto-create it — create and seed it once, in
+this order (seed *before* the first `up`, or MedAssist re-downloads the 2.2 GB embedder over the
+MTU-constrained link):
+
+```bash
+# 1. Create the shared volume
+docker volume create shared_onnx_models
+
+# 2. (Migration only) Seed from the old per-project volume that already holds the models.
+#    NOTE: Compose prefixes volume names with the project name, so the populated volume is
+#    `aidoctorassistant_medassist-models` (NOT the bare `medassist-models`). It already uses
+#    the same subdir layout. Stop the web container first so it isn't mid-download, and clear
+#    any partial download in the shared volume before copying:
+docker compose stop web
+docker run --rm -v aidoctorassistant_medassist-models:/src -v shared_onnx_models:/dst \
+  alpine sh -c "rm -rf /dst/* && cp -a /src/. /dst/"
+docker compose up -d web
+```
+
+On a clean machine with no prior volume, skip step 2 — both stacks download what they need on first
+run and populate the shared cache. DnD points at the reranker subdir via `Reranker:ModelPath`.
+
 ## Quick start (Docker)
 
 ```bash

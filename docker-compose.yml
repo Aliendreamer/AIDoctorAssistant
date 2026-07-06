@@ -14,7 +14,13 @@ services:
       # lives in config/appsettings.shared.json, which is loaded *after* env vars and
       # therefore overrides them — so set those values there, not here.
     volumes:
-      - medassist-models:/models
+      # Shared ONNX model cache — the same external volume is mounted by the sibling
+      # DndMcpAICsharpFun stack, so the cross-encoder reranker (ms-marco-MiniLM-L-6-v2)
+      # is downloaded once and reused by both. Layout is one subdir per model:
+      #   /models/multilingual-e5-large/  (MedAssist embedder)
+      #   /models/ms-marco-MiniLM-L-6-v2/ (shared reranker)
+      # Create + seed it once: see README "Shared ONNX model cache".
+      - shared_onnx_models:/models
       - ./books/uniquebooks:/books/uniquebooks
       - ./books/mdFiles:/books/mdfiles
     networks:
@@ -30,7 +36,10 @@ services:
   # grafana) and pgAdmin also live in the shared PCC stack.
 
 volumes:
-  medassist-models:
+  # Externally-managed, shared with the DndMcpAICsharpFun stack. Create once with
+  # `docker volume create shared_onnx_models` (see README). Not auto-created by compose.
+  shared_onnx_models:
+    external: true
 
 networks:
   medassist-net:
