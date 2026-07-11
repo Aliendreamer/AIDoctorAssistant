@@ -105,10 +105,18 @@
                     }
                     else
                     {
+                        var msgSources = GetMessageSources(idx);
+                        var segments = CitationMarkers.Parse(msg.Content, msgSources.Count);
                         <div class="answer">
-                            <div class="answer-body">@msg.Content</div>
+                            <div class="answer-body">@foreach (var seg in segments)
+                                {
+                                    if (seg.CitationNumber is int citeNum)
+                                    {<sup class="cite" title="@SourceLabel(msgSources, citeNum)">@citeNum</sup>}
+                                    else
+                                    {@seg.Text}
+                                }</div>
 
-                            @if (GetMessageSources(idx) is { Count: > 0 } msgSources)
+                            @if (msgSources is { Count: > 0 })
                             {
                                 <div class="sources">
                                     <div class="sources-head">
@@ -317,6 +325,24 @@
 
     private IReadOnlyList<SourceCitation> GetMessageSources(int idx)
         => _sourcesPerMessage.TryGetValue(idx, out var sources) ? sources : [];
+
+    // Tooltip for an inline [n] citation marker — names the source it maps to.
+    private static string SourceLabel(IReadOnlyList<SourceCitation> sources, int n)
+    {
+        if (n < 1 || n > sources.Count) return $"Source {n}";
+        var s = sources[n - 1];
+        if (s.SourceType == SourceType.Book)
+        {
+            var label = s.BookTitle ?? "Book";
+            if (s.PageStart.HasValue)
+            {
+                label += $", p. {s.PageStart}" +
+                    (s.PageEnd.HasValue && s.PageEnd != s.PageStart ? $"–{s.PageEnd}" : "");
+            }
+            return label;
+        }
+        return s.ArticleTitle ?? s.SourceName ?? "Web source";
+    }
 
     private bool MessageHasWebSources(int idx)
         => _sourcesPerMessage.TryGetValue(idx, out var sources) && sources.Any(s => s.SourceType == SourceType.Web);
