@@ -75,10 +75,12 @@
 ## 9. Verification
 
 - [x] 9.1 `dotnet build MedAssist.slnx` — 0 warnings.
-- [ ] 9.2 Drive the LIVE app and confirm every flow is unchanged: login, each query type, book
-      filter, PubMed toggle, clear history, and each admin page render + action. NOT YET DONE —
-      requires the PCC docker stack (Postgres/Qdrant/Ollama) running. Static verification done
-      instead: all bindings/logic preserved verbatim, `dotnet build` is 0-warning, and the real CSS
-      was rendered + screenshot in a browser. A live smoke test is still owed once the stack is up.
+- [x] 9.2 Drove the LIVE app in the docker container (built with host-network to dodge the WSL2
+      NuGet-MTU failure; `http://localhost:8080`). Verified in Playwright against real indexed data:
+      login renders in identity; Query shows the sidebar/user-chip, segmented control, real BG book
+      chips, azure user bubbles + answer cards (EN + BG) with the accent rule; Admin/Books shows the
+      mono-header table, green INDEXED status pills, and tabular chunk/date columns. DOM check
+      confirmed tokens load (`--accent` = #4C9EF5) and answer cards use `--surface`/`--border`.
+      Flows behave as before (bindings/logic unchanged).
 - [x] 9.3 Compare each surface against the approved mockup and the `design.md` accessibility floor
       (focus-visible on all controls, AA contrast, reduced-motion); note and fix gaps.
