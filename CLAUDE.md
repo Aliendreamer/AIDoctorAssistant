@@ -10,6 +10,18 @@ Guidance for Claude Code when working in this repository.
   lower risk but still require stating intent first.
 - `dotnet build` / `dotnet test` are fine to run without approval.
 
+## Memory
+
+Use **Serena** for project memory (repo-versioned under `.serena/memories/`), not the built-in
+`~/.claude/.../memory/` store.
+
+- **Recall:** at the start of non-trivial work, call Serena `list_memories` and `read_memory` for
+  anything relevant (activate the `AIDoctorAssistant` project first if Serena reports no active
+  project).
+- **Save:** write new durable facts with Serena `write_memory`. Prefer topic-prefixed names, e.g.
+  `feedback/<slug>` for how-to-work-with-the-user notes, `project/<slug>` for project context.
+- Do **not** write new memories into the built-in store for this project.
+
 ## What this is
 
 **MedAssist.AI** — a bilingual (EN/BG) RAG medical knowledge assistant for physicians. It answers
