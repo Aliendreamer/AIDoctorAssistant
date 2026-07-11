@@ -159,6 +159,18 @@
     "PGADMIN",
     "dpage",
     "healthcheck",
-    "isready"
+    "isready",
+    "aidoctorassistant",
+    "personalcommandcenter",
+    "behaviour",
+    "behavioural",
+    "blackholes",
+    "BUILDKIT",
+    "dont",
+    "opsx",
+    "rerank",
+    "rescoring",
+    "WCAG",
+    "wordmark"
   ]
 }

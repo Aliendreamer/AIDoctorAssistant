@@ -20,6 +20,10 @@ Use **Serena** for project memory (repo-versioned under `.serena/memories/`), no
   project).
 - **Save:** write new durable facts with Serena `write_memory`. Prefer topic-prefixed names, e.g.
   `feedback/<slug>` for how-to-work-with-the-user notes, `project/<slug>` for project context.
+- **Format:** every memory you write MUST be **markdownlint-clean** against `.markdownlint.json`
+  (blank line after headings and around lists, angle-bracket bare URLs like `<http://…>`, lines
+  ≤120 chars). Verify with `npx markdownlint-cli2 ".serena/memories/**/*.md"` (add `--fix` for the
+  structural rules; wrap long lines by hand).
 - Do **not** write new memories into the built-in store for this project.
 
 ## What this is
@@ -41,11 +45,13 @@ RRF fusion and a cross-encoder reranker, then generates a cited answer via a loc
 Layering is acyclic and top-down: Shared ← Data ← AI ← Web. Tests reference all four.
 
 ### Query flow
+
 `Browser → Blazor → QueryService → RAG plugin` → ICD query expansion → dense embed + BM25 sparse →
-`QdrantVectorStore` (dense + sparse prefetch → RRF fusion) → cross-encoder rerank → Ollama → answer
-+ citations. Optional trusted web search (SearXNG) is SSRF-guarded via `WebFetchPolicy`.
+`QdrantVectorStore` (dense + sparse prefetch → RRF fusion) → cross-encoder rerank → Ollama → answer +
+citations. Optional trusted web search (SearXNG) is SSRF-guarded via `WebFetchPolicy`.
 
 ### Ingestion flow
+
 Admin uploads PDF → `IngestionQueue` (a `Channel`) → `IngestionWorker` (`BackgroundService`) →
 Marker OCR (PDF→Markdown) → chunk → ICD-10 enrich → dense + BM25 sparse vectors → Qdrant upsert
 (deterministic point ids) + Postgres status. Indexing is resumable via checkpoints.
