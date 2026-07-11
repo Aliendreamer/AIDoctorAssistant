@@ -22,26 +22,33 @@
     <!-- ── Controls ── -->
     <div class="query-controls">
         <div class="query-controls-row">
-            <select @bind="_queryType" @bind:after="OnQueryTypeChangedAsync" class="form-select">
-                <option value="@QueryType.GlobalSearch">Global Search</option>
-                <option value="@QueryType.Disease">Disease Info</option>
-                <option value="@QueryType.Symptoms">Symptoms</option>
-                <option value="@QueryType.Treatment">Treatment</option>
-                <option value="@QueryType.DifferentialDiagnosis">Differential Diagnosis</option>
-            </select>
+            <div class="segmented" role="group" aria-label="Query type">
+                @foreach (var (type, label) in _queryTypes)
+                {
+                    <button type="button"
+                            class="segment @(_queryType == type ? "on" : "")"
+                            aria-pressed="@(_queryType == type)"
+                            @onclick="() => SelectQueryTypeAsync(type)">
+                        @label
+                    </button>
+                }
+            </div>
 
-            <select @bind="_language" class="form-select">
+            <div class="controls-spacer"></div>
+
+            <select @bind="_language" class="pill-select" aria-label="Language">
                 <option value="@LanguageFilter.Both">EN + BG</option>
                 <option value="@LanguageFilter.English">English only</option>
                 <option value="@LanguageFilter.Bulgarian">Bulgarian only</option>
             </select>
 
-            <label class="web-search-toggle">
+            <label class="switch @(_webSearchEnabled ? "on" : "")">
                 <input type="checkbox" @bind="_webSearchEnabled" />
-                PubMed fallback
+                <span class="switch-track" aria-hidden="true"></span>
+                <span class="switch-label">PubMed fallback</span>
             </label>
 
-            <button class="btn btn-sm btn-outline-secondary clear-btn"
+            <button class="clear-btn"
                     @onclick="ClearHistoryAsync"
                     disabled="@(_history.Count == 0)">
                 Clear history
@@ -57,6 +64,7 @@
                     <label class="book-chip @(selected ? "selected" : "")" title="@book.Author">
                         <input type="checkbox" value="@book.BookId"
                                @onchange="e => ToggleBook(book.BookId, (bool)(e.Value ?? false))" />
+                        <span class="chip-dot" aria-hidden="true"></span>
                         @book.Title
                         <span class="book-chip-lang">@book.Language</span>
                     </label>
@@ -67,58 +75,97 @@
 
     <!-- ── Chat area ── -->
     <div class="chat-container" id="chat-container">
-        @if (_history.Count == 0)
+        @if (_history.Count == 0 && !_loading)
         {
-            <div class="chat-empty">Ask a medical question to get started.</div>
+            <div class="chat-empty">
+                <div class="chat-empty-mark" aria-hidden="true">+</div>
+                <h2 class="chat-empty-title">Ask a clinical question</h2>
+                <p class="chat-empty-sub">
+                    Answers are drawn from your indexed medical library and cited to source.
+                    Pick a query mode above and, optionally, narrow to specific books.
+                </p>
+            </div>
         }
         else
         {
             @foreach (var (msg, idx) in _history.Select((m, i) => (m, i)))
             {
-                <div class="chat-bubble @(msg.Role == "user" ? "chat-bubble-user" : "chat-bubble-assistant")">
-                    <div class="chat-bubble-label-row">
-                        <span class="chat-bubble-label">@(msg.Role == "user" ? "You" : "MedAssist")</span>
+                <div class="turn @(msg.Role == "user" ? "turn-user" : "turn-assistant")">
+                    <div class="turn-label">
+                        <span>@(msg.Role == "user" ? "You" : "MedAssist")</span>
                         @if (MessageHasWebSources(idx))
                         {
                             <span class="web-badge" title="This answer includes web search results">Web</span>
                         }
                     </div>
-                    <div class="chat-bubble-body">@msg.Content</div>
-                    @if (GetMessageSources(idx) is { Count: > 0 } msgSources)
+
+                    @if (msg.Role == "user")
                     {
-                        <details class="chat-sources">
-                            <summary>Sources (@msgSources.Count)</summary>
-                            <ul class="list-unstyled mb-0 mt-1">
-                                @foreach (var src in msgSources)
-                                {
-                                    <li class="mb-1">
-                                        @if (src.SourceType == SourceType.Book)
-                                        {
-                                            <span>@src.BookTitle</span>
-                                            @if (!string.IsNullOrEmpty(src.ChapterTitle)) { <span> › @src.ChapterTitle</span> }
-                                            @if (!string.IsNullOrEmpty(src.SectionTitle)) { <span> › @src.SectionTitle</span> }
-                                            @if (src.PageStart.HasValue)
-                                            {
-                                                <span class="text-muted"> (p.&nbsp;@src.PageStart@(src.PageEnd.HasValue && src.PageEnd != src.PageStart ? $"–{src.PageEnd}" : ""))</span>
-                                            }
-                                        }
-                                        else if (src.SourceType == SourceType.Web)
-                                        {
-                                            <span class="web-source-icon">&#127760;</span>
-                                            @if (WebFetchPolicy.IsHttpUrl(src.Url))
-                                            {
-                                                <a href="@src.Url" target="_blank" rel="noopener noreferrer">@(src.ArticleTitle ?? src.Url)</a>
-                                            }
-                                            else
-                                            {
-                                                <span>@(src.ArticleTitle ?? "Web source")</span>
-                                            }
-                                        }
-                                    </li>
-                                }
-                            </ul>
-                        </details>
+                        <div class="user-msg">@msg.Content</div>
                     }
+                    else
+                    {
+                        <div class="answer">
+                            <div class="answer-body">@msg.Content</div>
+
+                            @if (GetMessageSources(idx) is { Count: > 0 } msgSources)
+                            {
+                                <div class="sources">
+                                    <div class="sources-head">
+                                        Sources <span class="sources-count">@msgSources.Count</span>
+                                    </div>
+                                    @foreach (var (src, i) in msgSources.Select((s, i) => (s, i)))
+                                    {
+                                        <div class="source @(src.SourceType == SourceType.Web ? "source-web" : "")">
+                                            <span class="source-idx">@(i + 1)</span>
+                                            @if (src.SourceType == SourceType.Book)
+                                            {
+                                                <span class="source-path">
+                                                    <b>@src.BookTitle</b>
+                                                    @if (!string.IsNullOrEmpty(src.ChapterTitle)) { <span class="sep">›</span> @src.ChapterTitle }
+                                                    @if (!string.IsNullOrEmpty(src.SectionTitle)) { <span class="sep">›</span> @src.SectionTitle }
+                                                </span>
+                                                @if (src.PageStart.HasValue)
+                                                {
+                                                    <span class="source-meta">p.&nbsp;@src.PageStart@(src.PageEnd.HasValue && src.PageEnd != src.PageStart ? $"–{src.PageEnd}" : "")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="source-meta"></span>
+                                                }
+                                            }
+                                            else if (src.SourceType == SourceType.Web)
+                                            {
+                                                <span class="source-path">
+                                                    @if (WebFetchPolicy.IsHttpUrl(src.Url))
+                                                    {
+                                                        <a href="@src.Url" target="_blank" rel="noopener noreferrer">@(src.ArticleTitle ?? src.Url)</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>@(src.ArticleTitle ?? "Web source")</span>
+                                                    }
+                                                    <span class="web-tag">@(src.SourceName ?? "Web")</span>
+                                                </span>
+                                                <span class="source-meta"></span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (_loading)
+            {
+                <div class="turn turn-assistant">
+                    <div class="turn-label"><span>MedAssist</span></div>
+                    <div class="answer thinking">
+                        <span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                        <span class="thinking-text">Searching the library…</span>
+                    </div>
                 </div>
             }
         }
@@ -127,29 +174,47 @@
     <!-- ── Error ── -->
     @if (_error is not null)
     {
-        <div class="alert alert-danger my-2">@_error</div>
+        <div class="query-error-wrap">
+            <div class="alert alert-danger mb-0">@_error</div>
+        </div>
     }
 
     <!-- ── Input ── -->
     <div class="chat-input-area">
-        <textarea @bind="_queryText" @bind:event="oninput"
-                  @onkeydown="HandleKeyDown"
-                  rows="1"
-                  placeholder="Ask a medical question… (Enter to send, Shift+Enter for new line)"></textarea>
-        <button class="chat-send-btn" @onclick="SubmitQueryAsync" disabled="@_loading">
-            @if (_loading)
-            {
-                <span class="spinner-border spinner-border-sm" role="status"></span>
-            }
-            else
-            {
-                <span>Send</span>
-            }
-        </button>
+        <div class="composer">
+            <textarea @bind="_queryText" @bind:event="oninput"
+                      @onkeydown="HandleKeyDown"
+                      rows="1"
+                      placeholder="Ask a clinical question…"></textarea>
+            <button class="chat-send-btn" @onclick="SubmitQueryAsync" disabled="@_loading">
+                @if (_loading)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                }
+                else
+                {
+                    <span>Send</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                }
+            </button>
+        </div>
+        <div class="composer-hint">
+            <span><kbd>Enter</kbd> send</span>
+            <span><kbd>Shift</kbd>+<kbd>Enter</kbd> new line</span>
+        </div>
     </div>
 </div>
 
 @code {
+    private static readonly (QueryType Type, string Label)[] _queryTypes =
+    [
+        (QueryType.GlobalSearch, "Global search"),
+        (QueryType.Disease, "Disease"),
+        (QueryType.Symptoms, "Symptoms"),
+        (QueryType.Treatment, "Treatment"),
+        (QueryType.DifferentialDiagnosis, "Differential"),
+    ];
+
     private List<BookInfo> _books = [];
     private HashSet<string> _selectedBookIds = [];
     private QueryType _queryType = QueryType.GlobalSearch;
@@ -176,6 +241,13 @@
         {
             await JS.InvokeVoidAsync("medassist.scrollToBottom", "chat-container");
         }
+    }
+
+    private async Task SelectQueryTypeAsync(QueryType type)
+    {
+        if (_queryType == type) return;
+        _queryType = type;
+        await OnQueryTypeChangedAsync();
     }
 
     private async Task OnQueryTypeChangedAsync()
@@ -235,7 +307,7 @@
         }
         catch (Exception ex)
         {
-            _error = $"Query failed: {ex.Message}";
+            _error = $"Couldn't complete the query: {ex.Message}. Try again or rephrase your question.";
         }
         finally
         {

@@ -1,54 +1,81 @@
 @using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="/query">MedAssist</a>
-    </div>
+<div class="nav-brand-row">
+    <a class="brand" href="/query">
+        <span class="brand-mark" aria-hidden="true">+</span>
+        <span class="brand-text">
+            <span class="brand-name">Med<b>Assist</b></span>
+            <span class="brand-sub">Clinical RAG</span>
+        </span>
+    </a>
+    <input type="checkbox" title="Navigation menu" class="navbar-toggler" />
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
+    <nav class="nav-list">
         <AuthorizeView>
             <Authorized Context="auth">
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="query">
-                        <span class="bi bi-search-nav-menu" aria-hidden="true"></span> Query
-                    </NavLink>
-                </div>
+                <NavLink class="nav-link" href="query">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+                    <span>Query</span>
+                </NavLink>
 
                 <AuthorizeView Roles="Admin" Context="adminAuth">
                     <Authorized>
-                        <div class="nav-item px-3 mt-2">
-                            <span class="nav-section-label px-1">Admin</span>
-                        </div>
-                        <div class="nav-item px-3">
-                            <NavLink class="nav-link" href="admin/books">
-                                <span class="bi bi-book-nav-menu" aria-hidden="true"></span> Books
-                            </NavLink>
-                        </div>
-                        <div class="nav-item px-3">
-                            <NavLink class="nav-link" href="admin/books/upload">
-                                <span class="bi bi-upload-nav-menu" aria-hidden="true"></span> Upload Book
-                            </NavLink>
-                        </div>
-                        <div class="nav-item px-3">
-                            <NavLink class="nav-link" href="admin/users">
-                                <span class="bi bi-people-nav-menu" aria-hidden="true"></span> Users
-                            </NavLink>
-                        </div>
+                        <span class="nav-label">Library</span>
+                        <NavLink class="nav-link" href="admin/books">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 5.5A2 2 0 0 1 6 4h5v16H6a2 2 0 0 0-2 2z"/><path d="M20 5.5A2 2 0 0 0 18 4h-5v16h5a2 2 0 0 1 2 2z"/></svg>
+                            <span>Books</span>
+                        </NavLink>
+                        <NavLink class="nav-link" href="admin/books/upload">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
+                            <span>Upload book</span>
+                        </NavLink>
+                        <NavLink class="nav-link" href="admin/users">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0" stroke-linecap="round"/><path d="M16 6.2a3 3 0 0 1 0 5.6M17.5 20a5.5 5.5 0 0 0-3-4.9" stroke-linecap="round"/></svg>
+                            <span>Users</span>
+                        </NavLink>
                     </Authorized>
                 </AuthorizeView>
 
-                <div class="nav-item px-3 mt-2">
-                    <form method="post" action="/logout" data-enhance="false">
-                        <button type="submit" class="nav-link btn btn-link text-start p-0 border-0">
-                            <span class="bi bi-box-arrow-left-nav-menu" aria-hidden="true"></span> Logout
-                        </button>
-                    </form>
+                <div class="nav-grow"></div>
+
+                <div class="user-chip">
+                    <span class="avatar" aria-hidden="true">@Initials(auth.User)</span>
+                    <span class="user-meta">
+                        <b>@(auth.User.Identity?.Name ?? "Signed in")</b>
+                        <span>@RoleLabel(auth.User)</span>
+                    </span>
                 </div>
+
+                <form method="post" action="/logout" data-enhance="false" class="logout-form">
+                    <button type="submit" class="nav-link logout-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>
+                        <span>Logout</span>
+                    </button>
+                </form>
             </Authorized>
         </AuthorizeView>
     </nav>
 </div>
+
+@code {
+    private static string Initials(ClaimsPrincipal user)
+    {
+        var name = user.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "··";
+        }
+
+        var parts = name.Split([' ', '.', '_', '-'], StringSplitOptions.RemoveEmptyEntries);
+        var initials = parts.Length >= 2
+            ? $"{parts[0][0]}{parts[1][0]}"
+            : name.Length >= 2 ? name[..2] : name;
+        return initials.ToUpperInvariant();
+    }
+
+    private static string RoleLabel(ClaimsPrincipal user) =>
+        user.IsInRole("Admin") ? "Admin" : "Doctor";
+}

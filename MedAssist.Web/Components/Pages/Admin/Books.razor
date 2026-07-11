@@ -43,10 +43,10 @@ else
                 <tr>
                     <td>@book.Title</td>
                     <td>@book.Author</td>
-                    <td>@book.Language.ToUpperInvariant()</td>
-                    <td>@book.Status</td>
-                    <td>@book.TotalChunks</td>
-                    <td>@(book.IndexedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                    <td class="num">@book.Language.ToUpperInvariant()</td>
+                    <td><span class="status-pill @StatusClass(book.Status)">@book.Status</span></td>
+                    <td class="num">@book.TotalChunks</td>
+                    <td class="num">@(book.IndexedAt?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                     <td>
                         @if (_reindexingIds.Contains(book.Id))
                         {
@@ -83,6 +83,14 @@ else
     private string? _error;
     private readonly HashSet<int> _reindexingIds = [];
     private readonly Dictionary<int, string> _messages = [];
+
+    private static string StatusClass(object? status)
+    {
+        var s = status?.ToString()?.ToLowerInvariant() ?? string.Empty;
+        if (s.Contains("fail") || s.Contains("error")) return "is-failed";
+        if (s.Contains("ing") || s.Contains("pending") || s.Contains("queue")) return "is-working";
+        return "is-ok";
+    }
 
     protected override async Task OnInitializedAsync()
     {
