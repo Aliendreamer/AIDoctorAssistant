@@ -1,0 +1,1 @@
+Prefer the semantic tools (Serena find_symbol / find_referencing_symbols / search_for_pattern, or the C# LSP) for C# code search; raw grep/rg is the right tool for config, compose files, markdown and other non-code. Shown once per session.
