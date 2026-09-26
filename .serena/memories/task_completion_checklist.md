@@ -7,7 +7,7 @@ When a coding task is complete:
 3. New logic was built **test-first** (superpowers:test-driven-development): write the test, watch
    it fail, then implement.
 4. For UI/behaviour changes, **verify live** when feasible — docker `web` + Playwright at
-   <http://localhost:8080> — not just unit tests. (Note the WSL2 host-network build gotcha in
+   <http://localhost:8081> — not just unit tests. (Note the WSL2 host-network build gotcha in
    `mem:suggested_commands`.)
 5. Update the OpenSpec change `tasks.md`; when the change is fully done, `openspec archive <name> -y`
    (syncs delta specs into `openspec/specs/`).

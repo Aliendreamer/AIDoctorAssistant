@@ -165,7 +165,7 @@ docker exec -it $(docker ps -qf name=ollama) ollama pull gemma2:9b
 docker compose up -d
 
 # 5. Open the web app
-open http://localhost:8080
+open http://localhost:8081
 ```
 
 ### Service URLs
@@ -176,8 +176,8 @@ router at `*.pcc.localhost`.
 
 | Service | URL | Owned by |
 | --- | --- | --- |
-| Web app | <http://localhost:8080> | MedAssist |
-| Scalar API docs | <http://localhost:8080/scalar/v1> | MedAssist |
+| Web app | <http://localhost:8081> | MedAssist |
+| Scalar API docs | <http://localhost:8081/scalar/v1> | MedAssist |
 | Marker | <http://localhost:5002/docs> | MedAssist |
 | Grafana | <http://grafana.pcc.localhost> | PCC |
 | Prometheus | <http://prometheus.pcc.localhost> | PCC |
@@ -189,7 +189,7 @@ router at `*.pcc.localhost`.
 
 ## UI
 
-The web UI is at **<http://localhost:8080>**. All pages require login — navigate there
+The web UI is at **<http://localhost:8081>**. All pages require login — navigate there
 and you will be redirected to the login screen automatically.
 
 ### Pages
@@ -224,7 +224,7 @@ entirely from the admin UI — the config list is only used for the first-run se
 The REST API uses JWT bearer tokens. Obtain one via:
 
 ```bash
-curl -s -X POST http://localhost:8080/api/auth/login \
+curl -s -X POST http://localhost:8081/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"medassist123"}' | jq .token
 ```

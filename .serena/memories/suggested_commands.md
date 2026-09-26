@@ -11,7 +11,7 @@
 ## Docker (needs explicit user approval per CLAUDE.md)
 
 - PCC stack must be up first (external network `personalcommandcenter_default`); the app is at
-  <http://localhost:8080>.
+  <http://localhost:8081>.
 - `docker compose up -d --build web` — normal path.
 - **WSL2 GOTCHA:** `docker build`'s NuGet restore blackholes on the default-bridge MTU
   ("connection reset by peer" mid-restore). Build with host networking instead:
@@ -32,5 +32,5 @@
 
 ## Live verification (UI/behaviour changes)
 
-- Drive the running app in Playwright at <http://localhost:8080> (login admin / seeded pwd) — see
+- Drive the running app in Playwright at <http://localhost:8081> (login admin / seeded pwd) — see
   `mem:task_completion_checklist`.

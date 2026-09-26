@@ -1,8 +1,8 @@
 ### MedAssist API Requests
-### Base URL: http://localhost:8080
+### Base URL: http://localhost:8081
 ### Set @token after login, @userId when deleting a user
 
-@baseUrl = http://localhost:8080
+@baseUrl = http://localhost:8081
 @token = <paste_token_here>
 @userId = <paste_user_uuid_here>
 @bookId = 1
