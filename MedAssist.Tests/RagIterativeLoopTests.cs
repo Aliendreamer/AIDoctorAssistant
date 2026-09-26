@@ -8,6 +8,8 @@ using Microsoft.SemanticKernel.ChatCompletion;
 
 namespace MedAssist.Tests;
 
+// Queries are Bulgarian (the corpus language) so no query-preparation call adds a second search term
+// and search counts reflect iteration passes only (tune-query-pipeline).
 public sealed class RagIterativeLoopTests
 {
     // Default options: score thresholds set to minimum so stub scores never trigger early exits
@@ -50,7 +52,7 @@ public sealed class RagIterativeLoopTests
         var reranker = new StubReranker(5.0f);
         var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 5, MinRetryScore = float.NegativeInfinity, MinAnswerScore = float.NegativeInfinity });
 
-        await sut.SearchAsync("fever", "en");
+        await sut.SearchAsync("треска", "en");
 
         Assert.Equal(1, vectorStore.SearchCallCount);
     }
@@ -63,7 +65,7 @@ public sealed class RagIterativeLoopTests
         var reranker = new StubReranker(-5.0f);
         var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 3, MinRetryScore = float.NegativeInfinity, MinAnswerScore = float.NegativeInfinity });
 
-        await sut.SearchAsync("fever", "en");
+        await sut.SearchAsync("треска", "en");
 
         // Initial search + 3 fallback iteration searches
         Assert.True(vectorStore.SearchCallCount > 1);
@@ -77,11 +79,44 @@ public sealed class RagIterativeLoopTests
         var reranker = new StubReranker(-10.0f);
         var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 10, MinRetryScore = float.NegativeInfinity, MinAnswerScore = float.NegativeInfinity });
 
-        await sut.SearchAsync("fever", "en");
+        await sut.SearchAsync("треска", "en");
 
         // With cap of 5, no more than 6 total search passes (initial + 5 fallback)
         Assert.True(vectorStore.SearchCallCount <= 6);
         Assert.True(vectorStore.SearchCallCount > 1);
+    }
+
+    [Fact]
+    public async Task EnglishQuestion_SearchesWithOriginalAndPreparedQuery()
+    {
+        var vectorStore = new StubVectorStore([MakeChunk(1)]);
+        var sut = MakePlugin(vectorStore, new StubReranker(5.0f),
+            new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 0, MinRetryScore = float.NegativeInfinity, MinAnswerScore = float.NegativeInfinity });
+
+        await sut.SearchAsync("fever", "en");
+
+        Assert.Equal(2, vectorStore.SearchCallCount);
+    }
+
+    [Fact]
+    public async Task OversizedExcerpts_SourcesMatchTheExcerptsActuallySent()
+    {
+        var big = Enumerable.Range(1, 5)
+            .Select(i => new MedicalChunk
+            {
+                BookId = $"book{i}", BookTitle = $"Book {i}", Language = "bg", ChapterTitle = "Chapter",
+                SectionTitle = "Section", ChunkIndex = i, Text = new string('ж', 12_000),
+            })
+            .ToArray();
+        var sut = MakePlugin(new StubVectorStore(big), new StubReranker(5.0f),
+            new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 0, MinRetryScore = float.NegativeInfinity, MinAnswerScore = float.NegativeInfinity });
+
+        // The stub chat echoes the final user message, so the answer shows the numbered excerpts sent.
+        var result = await sut.SearchAsync("треска", "bg");
+
+        Assert.InRange(result.Sources.Count, 1, 4);
+        Assert.Contains($"[{result.Sources.Count}] (Book", result.Answer);
+        Assert.DoesNotContain($"[{result.Sources.Count + 1}] (Book", result.Answer);
     }
 
     [Fact]
@@ -91,7 +126,7 @@ public sealed class RagIterativeLoopTests
         var reranker = new StubReranker(-10.0f);
         var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 0 });
 
-        await sut.SearchAsync("fever", "en");
+        await sut.SearchAsync("треска", "en");
 
         Assert.Equal(1, vectorStore.SearchCallCount);
     }
@@ -103,7 +138,7 @@ public sealed class RagIterativeLoopTests
         var reranker = new StubReranker(0.0f);
         var sut = MakePlugin(vectorStore, reranker);
 
-        var result = await sut.SearchAsync("fever", "en");
+        var result = await sut.SearchAsync("треска", "en");
 
         Assert.Contains("No relevant information found", result.Answer);
         Assert.Empty(result.Sources);
@@ -118,7 +153,7 @@ public sealed class RagIterativeLoopTests
         var reranker = new StubReranker(5.0f); // high score → stops early
         var sut = MakePlugin(vectorStore, reranker, new RagOptions { ConfidenceThreshold = 0.0f, MaxIterations = 0 });
 
-        var result = await sut.SearchAsync("fever", "en");
+        var result = await sut.SearchAsync("треска", "en");
 
         Assert.True(result.Sources.Count <= 5);
     }

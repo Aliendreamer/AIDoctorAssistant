@@ -25,8 +25,7 @@ public sealed class TreatmentPlugin : RagPluginBase
         [System.ComponentModel.Description("The condition to find treatments for")] string query,
         [System.ComponentModel.Description("Language filter: both, en, bg")] string language = "both",
         [System.ComponentModel.Description("Specific book IDs to search (null = all books)")] string[]? bookIds = null,
-        BookInfo[]? books = null,
         IReadOnlyList<ChatMessageDto>? conversationHistory = null,
         CancellationToken cancellationToken = default)
-        => base.ExecuteSearchAsync(query, language, bookIds, books, conversationHistory, cancellationToken);
+        => base.ExecuteSearchAsync(query, language, bookIds, conversationHistory, cancellationToken);
 }

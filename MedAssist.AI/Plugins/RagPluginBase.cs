@@ -1,4 +1,3 @@
-using System.Text;
 using MedAssist.Shared.Constants;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
@@ -50,14 +49,14 @@ public abstract partial class RagPluginBase
         string query,
         string language,
         string[]? bookIds,
-        IReadOnlyList<BookInfo>? books = null,
         IReadOnlyList<ChatMessageDto>? conversationHistory = null,
         CancellationToken cancellationToken = default)
     {
         var langFilter = ParseLanguage(language);
 
-        // Rewrite short follow-up queries so the search has enough context to retrieve the right content.
-        var searchQuery = await MaybeRewriteQueryAsync(query, conversationHistory, cancellationToken);
+        // Bulgarian search query (the corpus language): translates non-Bulgarian questions and makes
+        // follow-ups self-contained, so retrieval and reranking see the corpus language.
+        var searchQuery = await PrepareSearchQueryAsync(query, conversationHistory, cancellationToken);
 
         var expandedTerms = await _dictionary.ExpandQueryAsync(searchQuery, cancellationToken);
 
@@ -74,7 +73,7 @@ public abstract partial class RagPluginBase
             return new QueryResult { Answer = "No relevant information found in the indexed books." };
         }
 
-        var scored = await _reranker.RerankAsync(searchQuery, candidates, cancellationToken);
+        var scored = await QueryPreparation.RerankByLanguageAsync(_reranker, searchQuery, query, candidates, cancellationToken);
 
         // CRAG "INCORRECT" branch: initial score is so low that retrying won't help — signal web fallback.
         var initialScore = scored.Count > 0 ? scored[0].Score : float.NegativeInfinity;
@@ -109,7 +108,7 @@ public abstract partial class RagPluginBase
                 .DistinctBy(c => (c.BookId, c.ChunkIndex))
                 .ToList();
 
-            scored = await _reranker.RerankAsync(searchQuery, candidates, cancellationToken);
+            scored = await QueryPreparation.RerankByLanguageAsync(_reranker, searchQuery, query, candidates, cancellationToken);
         }
 
         var topScore = scored.Count > 0 ? scored[0].Score : float.NegativeInfinity;
@@ -126,7 +125,7 @@ public abstract partial class RagPluginBase
         // Guard against domain-drift: if the query contains specific Latin terms (medical eponyms,
         // drug names) that the cross-encoder can't evaluate in Bulgarian context, verify they
         // actually appear in the retrieved chunks.
-        var latinTerms = ExtractLatinTerms(searchQuery);
+        var latinTerms = QueryPreparation.ExtractLatinTerms(searchQuery);
         if (latinTerms.Count > 0)
         {
             var topTexts = scored.Take(3).Select(s => s.Chunk.Text).ToList();
@@ -146,7 +145,7 @@ public abstract partial class RagPluginBase
             .Take(5)
             .ToList();
 
-        return await BuildResultAsync(query, topChunks, books, conversationHistory, cancellationToken);
+        return await BuildResultAsync(query, topChunks, conversationHistory, cancellationToken);
     }
 
     private static IReadOnlyList<string> SelectTerms(IReadOnlyList<string> expandedTerms, RetryStrategy strategy)
@@ -163,7 +162,6 @@ public abstract partial class RagPluginBase
     private async Task<QueryResult> BuildResultAsync(
         string query,
         IReadOnlyList<MedicalChunk> chunks,
-        IReadOnlyList<BookInfo>? books,
         IReadOnlyList<ChatMessageDto>? conversationHistory,
         CancellationToken cancellationToken)
     {
@@ -172,11 +170,14 @@ public abstract partial class RagPluginBase
             return new QueryResult { Answer = "No relevant information found in the indexed books." };
         }
 
+        // Fit the prompt to the context window first: dropped excerpts must not appear in `sources`.
+        var (excerpts, history) = AnswerPromptBuilder.FitToBudget(Profile, query, chunks, conversationHistory);
+
         // Citation-marker contract (change cited-answer-markers): `sources` and the numbered
-        // `context` excerpts below are both built from `chunks` in the SAME order, so excerpt [n]
+        // excerpts in the prompt are both built from `excerpts` in the SAME order, so excerpt [n]
         // corresponds to sources[n-1]. QueryService appends web sources after these, preserving the
         // book indices. Keep these two loops in lockstep.
-        var sources = chunks.Select(c => new SourceCitation
+        var sources = excerpts.Select(c => new SourceCitation
         {
             SourceType = SourceType.Book,
             BookTitle = c.BookTitle,
@@ -187,66 +188,11 @@ public abstract partial class RagPluginBase
             PageEnd = c.PageEnd
         }).ToList();
 
-        var systemPrompt = new StringBuilder();
-        systemPrompt.AppendLine(GetSystemPrompt());
-
-        if (books is { Count: > 0 })
-        {
-            systemPrompt.AppendLine();
-            systemPrompt.AppendLine("Sources searched:");
-            foreach (var b in books)
-            {
-                var entry = string.IsNullOrEmpty(b.Author)
-                    ? $"- {b.Title}"
-                    : $"- {b.Title} by {b.Author}";
-                systemPrompt.AppendLine(entry);
-            }
-        }
-
-        var context = new StringBuilder();
-        for (var i = 0; i < chunks.Count; i++)
-        {
-            var c = chunks[i];
-            // 1-based number == the excerpt's citation marker (maps to sources[i]).
-            context.AppendLine($"[{i + 1}] ({c.BookTitle} — {c.ChapterTitle} › {c.SectionTitle})");
-            context.AppendLine(c.Text);
-            context.AppendLine();
-        }
-
-        var history = new ChatHistory();
-        history.AddSystemMessage(systemPrompt.ToString());
-
-        if (conversationHistory is { Count: > 0 })
-        {
-            foreach (var msg in conversationHistory)
-            {
-                if (msg.Role == "user")
-                {
-                    history.AddUserMessage(msg.Content);
-                }
-                else
-                {
-                    history.AddAssistantMessage(msg.Content);
-                }
-            }
-        }
-
-        var languageInstruction = query.Any(c => c is >= 'Ѐ' and <= 'ӿ')
-            ? "ВАЖНО: Отговорът трябва да е изцяло на български език. Не използвай никакъв друг език.\n\n"
-            : "IMPORTANT: Respond entirely in English.\n\n";
-
-        // /no_think: reasoning models (qwen3) otherwise prepend a long <think> block — we want prose
-        // only, and skipping the reasoning also cuts latency. Harmless for non-reasoning models.
-        // The citation reminder is repeated here, immediately before generation, because weaker local
-        // models weight the most recent instruction most heavily (cited-answer-markers tuning).
-        history.AddUserMessage(
-            $"{languageInstruction}Question: {query}\n\nNumbered medical excerpts:\n\n{context}\n\n" +
-            "Answer as flowing prose, and after each factual clinical claim append the number(s) of the " +
-            "excerpt(s) above that support it in square brackets, e.g. [1] or [2][4]. Use only the numbers " +
-            "shown above.\n\n/no_think");
+        var prompt = AnswerPromptBuilder.BuildBookAnswer(Profile, query, excerpts, history);
 
         var chat = _kernel.GetRequiredService<IChatCompletionService>();
-        var response = await chat.GetChatMessageContentAsync(history, cancellationToken: cancellationToken);
+        var response = await chat.GetChatMessageContentAsync(prompt, AnswerPromptBuilder.ExecutionSettings, cancellationToken: cancellationToken);
+        PromptMetrics.Record(GetType().Name.Replace("Plugin", string.Empty, StringComparison.Ordinal), prompt, response);
         var answer = MarkdownStripper.Strip(response.Content ?? "Unable to generate a response.");
 
         return new QueryResult { Answer = answer, Sources = sources };
@@ -259,75 +205,29 @@ public abstract partial class RagPluginBase
         _ => LanguageFilter.Both
     };
 
-    // Extract purely-Latin alphabetic words (≥5 chars) from the query.
-    // These are typically medical eponyms (Chiari, Arnold, Wilson, Parkinson) or
-    // specific English terms that should appear verbatim in relevant chunks.
-    private static IReadOnlyList<string> ExtractLatinTerms(string query)
-    {
-        return query
-            .Split([' ', ',', '.', '!', '?', '(', ')', ':', ';', '\t', '\n', '/', '-'], StringSplitOptions.RemoveEmptyEntries)
-            .Where(w => w.Length >= 5 && w.All(c => c is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z')))
-            .Select(w => w.ToLowerInvariant())
-            .Distinct()
-            .ToList();
-    }
-
-    private async Task<string> MaybeRewriteQueryAsync(
+    private async Task<string> PrepareSearchQueryAsync(
         string query,
         IReadOnlyList<ChatMessageDto>? conversationHistory,
         CancellationToken cancellationToken)
     {
-        var wordCount = query.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-        if (wordCount >= 20 || conversationHistory is not { Count: >= 2 })
+        if (!QueryPreparation.NeedsPreparation(query, conversationHistory))
         {
             return query;
         }
-
-        var lastUser = conversationHistory.LastOrDefault(m => m.Role == "user")?.Content;
-        if (lastUser is null || lastUser == query)
-        {
-            return query;
-        }
-
-        var rewriteHistory = new ChatHistory();
-        rewriteHistory.AddSystemMessage(
-            "You are a medical search query optimizer. " +
-            "Rewrite the follow-up question as a concise, self-contained medical search query using context from the previous question. " +
-            "IMPORTANT: Keep the rewritten query in the exact same language as the follow-up question. " +
-            "Output ONLY the rewritten query — no explanation, no quotes.");
-        rewriteHistory.AddUserMessage(
-            $"Previous question: {lastUser}\n\nFollow-up: {query}\n\nRewritten query:\n\n/no_think");
 
         var chat = _kernel.GetRequiredService<IChatCompletionService>();
-        var response = await chat.GetChatMessageContentAsync(rewriteHistory, cancellationToken: cancellationToken);
+        var response = await chat.GetChatMessageContentAsync(
+            QueryPreparation.BuildPrompt(query, conversationHistory), QueryPreparation.Settings,
+            cancellationToken: cancellationToken);
         // Strip any reasoning block so a qwen3 <think>…</think> can't leak into the search query.
-        var rewritten = MarkdownStripper.Strip(response.Content ?? string.Empty);
+        var prepared = MarkdownStripper.Strip(response.Content ?? string.Empty).Trim();
 
-        _logger.LogDebug("Query rewrite: '{Original}' → '{Rewritten}'", query, rewritten);
-        return string.IsNullOrWhiteSpace(rewritten) ? query : rewritten;
+        _logger.LogDebug("Search query prepared: '{Original}' → '{Prepared}'", query, prepared);
+        return string.IsNullOrWhiteSpace(prepared) ? query : prepared;
     }
 
-    protected virtual string GetSystemPrompt() =>
-        """
-        You are MedAssist, a clinical decision support assistant for physicians.
-
-        Your answers must be written as continuous prose — the same way a knowledgeable colleague explains something in conversation. Study the example below and match its style exactly.
-
-        The medical excerpts you are given are numbered ([1], [2], …). When a factual clinical statement is supported by a specific excerpt, append that excerpt's number in square brackets immediately after the statement, e.g. [1] or [2][4]. Cite only excerpts that genuinely support the statement, keep the marker inline within the flowing prose, and never use a number that is not among the provided excerpts. Do not attach markers to general or connective sentences.
-
-        EXAMPLE QUESTION: What is Graves' disease?
-
-        EXAMPLE ANSWER:
-        Graves' disease is an autoimmune disorder in which the immune system produces thyroid-stimulating immunoglobulins that bind to and chronically activate TSH receptors, driving the thyroid to overproduce thyroxine [1]. It is the single most common cause of hyperthyroidism, responsible for roughly 80% of cases according to the endocrinology sources indexed here [1]. Patients typically present with a constellation of symptoms reflecting thyroid excess — palpitations, heat intolerance, unintentional weight loss despite a normal or increased appetite, fine tremor, and anxiety [2]. A hallmark not shared with other causes of hyperthyroidism is Graves' ophthalmopathy, in which immune-mediated inflammation of the orbital tissues produces proptosis, periorbital oedema, and in severe cases diplopia or corneal exposure injury [2]. Treatment is chosen based on patient age, goitre size, and disease severity, and the main options are antithyroid drugs such as methimazole, radioactive iodine ablation, or surgical thyroidectomy [3]. The choice between these is discussed at length in the indexed textbooks, which note that antithyroid drugs are preferred as first-line therapy in younger patients and during pregnancy, while definitive ablative treatment is generally preferred when medical therapy fails or relapse occurs [3].
-
-        RULES — follow these without exception:
-        - Always respond in the same language the user asked in. If the question is in Bulgarian, answer in Bulgarian. If in English, answer in English.
-        - Write only in paragraphs of complete sentences. No lists of any kind.
-        - Do not start any line with a dash, asterisk, number, or heading marker.
-        - Do not bold or italicise any text.
-        - Support factual claims with the bracketed number(s) of the excerpt(s) that back them, as shown in the example; you may also mention the source book or section naturally in the prose.
-        - If the excerpts are insufficient, say so in one sentence in the user's language and stop.
-        """;
+    /// <summary>This query type's delta over the shared prompt core (see <see cref="AnswerPromptBuilder"/>).</summary>
+    protected virtual PromptProfile Profile => PromptProfiles.Default;
 
 
     private sealed record RetryStrategy(int TopK, bool AnyLanguage, bool LongestOnly);

@@ -21,6 +21,21 @@ consistency lever, not a bug. Options to make markers more reliable:
 - **Post-generation citation pass** — a second, cheap LLM call that inserts `[n]` into the finished
   prose, if determinism matters more than cost/latency.
 
+**Update (2026-09-26, `streamline-rag-prompts`):** much of the unreliability was **context
+truncation, not the model**. Ollama served every call at its 4,096-token default; RAG prompts hit
+4,095 tokens, lost their start (system prompt, language line), and context-shifted mid-answer. With
+`num_ctx = 8192`, de-duplicated prompts and the language/citation lines placed last, the Bulgarian
+golden set scored 12/12 on markers, markers-in-range and answer language (see
+`openspec/changes/archive/2026-09-26-streamline-rag-prompts/comparison.md`). Follow-up `tune-query-pipeline` then
+budgeted the prompt against the window (no truncation, largest prompt 5.2k), made the rewrite call
+fast (`think: false`, 12–43 tokens instead of ~1,000), and translated English questions into a
+Bulgarian search query — English now answers from the Bulgarian books (18/18, mean latency 17.6 s;
+see `openspec/changes/archive/2026-09-26-tune-query-pipeline/comparison.md`). Open tuning lever: the budget keeps ~900
+tokens of unused headroom, so some answers use 4 excerpts instead of 5.
+
+Note: `qwen3:14b` is already pulled in the shared Ollama, so the "larger model" lever needs no extra
+disk space.
+
 ### Medical-document model upgrade — PaddleOCR-VL 1.6 + MedGemma 1.5 4B
 
 Evaluate swapping the two model-bound stages of the pipeline for medically/structurally stronger

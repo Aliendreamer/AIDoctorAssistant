@@ -19,24 +19,36 @@ positions (and therefore their numbers) in the merged list.
 - **THEN** the book sources keep their original indices `1..K` and web sources take indices `K+1…`
 
 ### Requirement: Model-emitted citation markers
-The book-RAG system prompts SHALL instruct the model to support factual clinical claims by appending
-the supporting excerpt number(s) in square brackets (e.g. `[1]` or `[2][4]`), while preserving the
-existing continuous-prose style (no lists, no markdown, answering in the question's language). The
-instruction SHALL tell the model to cite only excerpts that support the specific claim and never to
-invent a number not present in the excerpts.
+
+The book-RAG answer prompt SHALL instruct the model, exactly once and in the final user message
+after the numbered excerpts, to support factual clinical claims by appending the supporting excerpt
+number(s) in square brackets (e.g. `[1]` or `[2][4]`), while preserving the existing continuous-prose
+style (no lists, no markdown, answering in the question's language). The instruction SHALL tell the
+model to cite only excerpts that support the specific claim and never to invent a number not present
+in the excerpts. Conversation history sent with the prompt SHALL NOT contain `[n]` markers from
+prior answers.
 
 #### Scenario: Cited claim
+
 - **WHEN** the model states a claim supported by excerpt 2
 - **THEN** it appends `[2]` after that claim, within flowing prose
 
 #### Scenario: Prose style preserved
+
 - **WHEN** an answer is generated with citation markers enabled
 - **THEN** it is still continuous prose with no bullet lists, numbered lists, headings, or bold /
   italic markdown
 
 #### Scenario: Language preserved
+
 - **WHEN** the question is in Bulgarian
 - **THEN** the answer is in Bulgarian with the same bracketed `[n]` markers
+
+#### Scenario: No stale markers in history
+
+- **WHEN** a follow-up question is asked after an answer that contained `[1]` and `[3]`
+- **THEN** the history turn sent to the model contains that answer without the `[1]` and `[3]`
+  markers
 
 ### Requirement: Markers preserved through web enrichment
 When a book answer is enriched with web sources, the enrichment step SHALL preserve any existing
