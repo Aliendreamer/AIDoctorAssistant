@@ -43,3 +43,6 @@ Thumbs.db
 logs/
 *.log
 publish
+
+## Python
+__pycache__/
