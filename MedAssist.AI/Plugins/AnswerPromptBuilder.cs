@@ -50,17 +50,29 @@ public static partial class AnswerPromptBuilder
 
     /// <summary>
     /// Settings for every chat call: requests a context window large enough for the RAG prompt plus the
-    /// answer (OllamaSharp maps <c>num_ctx</c> onto the request options).
+    /// answer (OllamaSharp maps <c>num_ctx</c> onto the request options). An active
+    /// <see cref="RagRunScope"/> replaces the model, context window and temperature.
     /// </summary>
-    public static PromptExecutionSettings ExecutionSettings { get; } = new()
+    public static PromptExecutionSettings ExecutionSettings =>
+        RagRunScope.Current is { } scope ? BuildSettings(scope.Overrides) : _defaultSettings;
+
+    private static readonly PromptExecutionSettings _defaultSettings = BuildSettings(new RagRunOverrides());
+
+    private static PromptExecutionSettings BuildSettings(RagRunOverrides overrides)
     {
-        ExtensionData = new Dictionary<string, object>
+        var data = new Dictionary<string, object>
         {
-            ["num_ctx"] = PromptConstants.ContextWindowTokens,
+            ["num_ctx"] = overrides.ContextWindowTokens ?? PromptConstants.ContextWindowTokens,
             // Reasoning off: we want prose only, and qwen3 does not reliably honour /no_think.
             ["think"] = false,
-        },
-    };
+        };
+        if (overrides.Temperature is { } temperature)
+        {
+            data["temperature"] = temperature;
+        }
+
+        return new PromptExecutionSettings { ModelId = overrides.ModelId, ExtensionData = data };
+    }
 
     public static ChatHistory BuildBookAnswer(
         PromptProfile profile,
@@ -81,7 +93,7 @@ public static partial class AnswerPromptBuilder
 
         var history = new ChatHistory();
         history.AddSystemMessage(system.ToString().TrimEnd());
-        AddHistory(history, PrepareHistory(conversationHistory, PromptConstants.HistoryCharBudget));
+        AddHistory(history, PrepareHistory(conversationHistory, RagRunScope.HistoryCharBudget));
 
         // Citation-marker contract (cited-answer-markers): excerpt [n] corresponds to sources[n-1]; the
         // caller builds `sources` from the same `chunks` in the same order.
@@ -123,7 +135,7 @@ public static partial class AnswerPromptBuilder
         IReadOnlyList<ChatMessageDto>? conversationHistory,
         int budgetTokens = PromptBudgetTokens)
     {
-        var history = PrepareHistory(conversationHistory, PromptConstants.HistoryCharBudget).ToList();
+        var history = PrepareHistory(conversationHistory, RagRunScope.HistoryCharBudget).ToList();
         var kept = chunks.ToList();
 
         while (EstimateTokens(BuildBookAnswer(profile, query, kept, history)) > budgetTokens)

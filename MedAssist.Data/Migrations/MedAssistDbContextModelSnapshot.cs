@@ -243,6 +243,110 @@ namespace MedAssist.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MedAssist.Data.Entities.EvaluationResultEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CaseId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("case_id");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("details");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer")
+                        .HasColumnName("ordinal");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "CaseId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_evaluation_results_run_case");
+
+                    b.ToTable("evaluation_results", (string)null);
+                });
+
+            modelBuilder.Entity("MedAssist.Data.Entities.EvaluationRunEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("Done")
+                        .HasColumnType("integer")
+                        .HasColumnName("done");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text")
+                        .HasColumnName("error");
+
+                    b.Property<bool>("IsBaseline")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_baseline");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Phase")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("phase");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("snapshot");
+
+                    b.Property<string>("StartedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("started_by");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("text")
+                        .HasColumnName("summary");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("integer")
+                        .HasColumnName("total");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_evaluation_runs_created_at");
+
+                    b.ToTable("evaluation_runs", (string)null);
+                });
+
             modelBuilder.Entity("MedAssist.Data.Entities.ExtractionStatusEntity", b =>
                 {
                     b.Property<int>("BookDbId")
@@ -417,6 +521,15 @@ namespace MedAssist.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("MedAssist.Data.Entities.EvaluationResultEntity", b =>
+                {
+                    b.HasOne("MedAssist.Data.Entities.EvaluationRunEntity", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MedAssist.Data.Entities.IllnessAliasEntity", b =>

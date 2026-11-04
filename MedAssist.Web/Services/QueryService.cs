@@ -101,7 +101,8 @@ public sealed partial class QueryService
                 ], cancellationToken);
             }
 
-            if (request.WebSearchEnabled || result.RequiresWebFallback)
+            var bookOnly = RagRunScope.Current?.Overrides.BookOnly == true;
+            if (!bookOnly && (request.WebSearchEnabled || result.RequiresWebFallback))
             {
                 try
                 {
@@ -125,6 +126,11 @@ public sealed partial class QueryService
         {
             // Ollama / Qdrant / embedder failures previously surfaced as raw 500s with no domain log.
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            if (RagRunScope.Current?.Trace is { } trace)
+            {
+                trace.Error = ex.Message;
+            }
+
             _logger.LogError(ex, "Query failed for type {PluginType}", pluginType);
             return new QueryResult
             {

@@ -1,0 +1,258 @@
+{
+  "cases": [
+    {
+      "id": "G1", "language": "BG", "queryType": "Disease", "question": "Какво е болест на Кавазаки?",
+      "relevantTerms": [["кавазаки", "кавасаки", "kawasaki"]],
+      "requiredFacts": [
+        "Болестта на Кавазаки е остър системен васкулит, който засяга предимно малки деца.",
+        "Основното усложнение е засягане на коронарните артерии с образуване на аневризми.",
+        "Лечението включва интравенозен имуноглобулин и ацетилсалицилова киселина."
+      ],
+      "forbiddenClaims": ["Болестта на Кавазаки се лекува основно с антибиотици."]
+    },
+    {
+      "id": "G2", "language": "BG", "queryType": "Symptoms", "question": "Дете с лаеща кашлица, дрезгав глас и инспираторен стридор",
+      "relevantTerms": [[" круп", "ларинг"]],
+      "requiredFacts": [
+        "Картината отговаря на крупа (остър ларинготрахеит, псевдокруп).",
+        "Причинителят обикновено е вирусен, най-често парагрипен вирус.",
+        "Лечението включва кортикостероиди, а при изразен стридор и инхалаторен адреналин."
+      ],
+      "forbiddenClaims": ["При вирусен крупа рутинно се назначават антибиотици."]
+    },
+    {
+      "id": "G3", "language": "BG", "queryType": "Treatment", "question": "Лечение на остър среден отит при деца",
+      "relevantTerms": [[" отит"]],
+      "requiredFacts": [
+        "Болката и температурата се овладяват с парацетамол или ибупрофен.",
+        "Антибиотик на първи избор е амоксицилин.",
+        "При по-големи деца с леко протичане може да се изчака преди започване на антибиотик."
+      ]
+    },
+    {
+      "id": "G4", "language": "BG", "queryType": "GlobalSearch", "question": "Бронхиолит при кърмачета",
+      "relevantTerms": [["бронхиолит"]],
+      "requiredFacts": [
+        "Най-честият причинител е респираторно-синцитиалният вирус.",
+        "Заболяването засяга предимно кърмачета и деца под две години.",
+        "Лечението е предимно поддържащо, с кислород и осигуряване на хидратация."
+      ],
+      "forbiddenClaims": ["Антибиотиците са рутинно лечение при бронхиолит."]
+    },
+    {
+      "id": "G5", "language": "BG", "queryType": "DifferentialDiagnosis", "question": "Дете с температура от 5 дни, ягодов език, обрив и конюнктивит",
+      "relevantTerms": [["кавазаки", "кавасаки", "kawasaki", "скарлатин"]],
+      "requiredFacts": [
+        "Най-вероятната диагноза е болест на Кавазаки.",
+        "Скарлатината влиза в диференциалната диагноза.",
+        "Необходима е оценка на коронарните артерии с ехокардиография."
+      ]
+    },
+    {
+      "id": "G6", "language": "BG", "queryType": "Treatment", "question": "Лечение на отравяне с парацетамол при дете",
+      "relevantTerms": [["парацетамол", "ацетаминофен", "paracetamol"]],
+      "requiredFacts": [
+        "Антидотът е N-ацетилцистеин.",
+        "Основната опасност е чернодробно увреждане.",
+        "Решението за лечение се основава на серумната концентрация на парацетамол."
+      ]
+    },
+    {
+      "id": "G7", "language": "BG", "queryType": "Disease", "question": "Какво е муковисцидоза?",
+      "relevantTerms": [["муковисцидоза", "кистозна фиброза"]],
+      "requiredFacts": [
+        "Муковисцидозата е автозомно-рецесивно заболяване, причинено от мутации в гена CFTR.",
+        "Гъстият секрет засяга предимно белите дробове и панкреаса.",
+        "Диагнозата се потвърждава с потен тест."
+      ]
+    },
+    {
+      "id": "G8", "language": "BG", "queryType": "Symptoms", "question": "Дете с висока температура и петехиален обрив",
+      "relevantTerms": [["менингок", "петехи", "пурпур"]],
+      "requiredFacts": [
+        "Трябва да се мисли за менингококова инфекция.",
+        "Състоянието е спешно и изисква незабавна оценка и парентерален антибиотик."
+      ],
+      "forbiddenClaims": ["Детето може спокойно да се наблюдава вкъщи без спешна оценка."]
+    },
+    {
+      "id": "G9", "language": "BG", "queryType": "GlobalSearch", "question": "Фебрилни гърчове при деца",
+      "relevantTerms": [["гърч", "конвулс"], ["фебрил", "темпер"]],
+      "requiredFacts": [
+        "Фебрилните гърчове обичайно се появяват между шестмесечна и петгодишна възраст.",
+        "Простите фебрилни гърчове са кратки, генерализирани и с добра прогноза.",
+        "При продължителен гърч се прилага бензодиазепин, например диазепам."
+      ],
+      "forbiddenClaims": ["Всяко дете с прост фебрилен гърч се нуждае от продължително антиепилептично лечение."]
+    },
+    {
+      "id": "G10", "language": "BG", "queryType": "DifferentialDiagnosis", "question": "Дете с болка в корема, повръщане и температура",
+      "relevantTerms": [["апендицит", "гастроентерит", "корем"]],
+      "requiredFacts": [
+        "Острият апендицит трябва да бъде обмислен.",
+        "Острият гастроентерит влиза в диференциалната диагноза."
+      ]
+    },
+    {
+      "id": "G11", "language": "BG", "queryType": "Treatment", "question": "Лечение на остър гастроентерит с дехидратация при деца",
+      "relevantTerms": [["дехидрат", "рехидрат", "гастроентерит"]],
+      "requiredFacts": [
+        "Основата на лечението е перорална рехидратация с рехидратиращ разтвор.",
+        "При тежка дехидратация е необходима интравенозна рехидратация."
+      ],
+      "forbiddenClaims": ["Антибиотиците са рутинно лечение при всеки остър гастроентерит."]
+    },
+    {
+      "id": "G12", "language": "BG", "queryType": "Treatment", "question": "А при кърмачета?", "followUpOf": "G11",
+      "relevantTerms": [["дехидрат", "рехидрат", "гастроентерит"]],
+      "requiredFacts": [
+        "При кърмачета се прилага рехидратация с рехидратиращ разтвор.",
+        "Кърменето трябва да продължи по време на заболяването."
+      ],
+      "forbiddenClaims": ["Кърменето трябва да се прекрати при гастроентерит."]
+    },
+    {
+      "id": "E1", "language": "EN", "queryType": "Disease", "question": "What is Kawasaki disease?",
+      "relevantTerms": [["кавазаки", "кавасаки", "kawasaki"]],
+      "requiredFacts": [
+        "Kawasaki disease is an acute systemic vasculitis that mainly affects young children.",
+        "The main complication is coronary artery involvement with aneurysm formation.",
+        "Treatment includes intravenous immunoglobulin and aspirin."
+      ],
+      "forbiddenClaims": ["Kawasaki disease is treated primarily with antibiotics."]
+    },
+    {
+      "id": "E2", "language": "EN", "queryType": "Symptoms", "question": "Child with barking cough, hoarse voice and inspiratory stridor",
+      "relevantTerms": [[" круп", "ларинг"]],
+      "requiredFacts": [
+        "The picture fits croup (acute laryngotracheitis).",
+        "The cause is usually viral, most often parainfluenza virus.",
+        "Treatment includes corticosteroids, with nebulised adrenaline for marked stridor."
+      ],
+      "forbiddenClaims": ["Antibiotics are routinely given for viral croup."]
+    },
+    {
+      "id": "E3", "language": "EN", "queryType": "Treatment", "question": "Treatment of acute otitis media in children",
+      "relevantTerms": [[" отит"]],
+      "requiredFacts": [
+        "Pain and fever are managed with paracetamol or ibuprofen.",
+        "The first-line antibiotic is amoxicillin.",
+        "In older children with mild disease, antibiotics can be deferred while observing."
+      ]
+    },
+    {
+      "id": "E4", "language": "EN", "queryType": "GlobalSearch", "question": "Bronchiolitis in infants",
+      "relevantTerms": [["бронхиолит"]],
+      "requiredFacts": [
+        "The most common cause is respiratory syncytial virus.",
+        "It mainly affects infants and children under two years.",
+        "Treatment is mainly supportive, with oxygen and hydration."
+      ],
+      "forbiddenClaims": ["Antibiotics are routine treatment for bronchiolitis."]
+    },
+    {
+      "id": "E5", "language": "EN", "queryType": "DifferentialDiagnosis", "question": "Child with fever for 5 days, strawberry tongue, rash and conjunctival injection",
+      "relevantTerms": [["кавазаки", "кавасаки", "kawasaki", "скарлатин"]],
+      "requiredFacts": [
+        "The most likely diagnosis is Kawasaki disease.",
+        "Scarlet fever belongs in the differential diagnosis.",
+        "The coronary arteries need assessment with echocardiography."
+      ]
+    },
+    {
+      "id": "E6", "language": "EN", "queryType": "Treatment", "question": "Management of paracetamol poisoning in a child",
+      "relevantTerms": [["парацетамол", "ацетаминофен", "paracetamol"]],
+      "requiredFacts": [
+        "The antidote is N-acetylcysteine.",
+        "The main danger is liver damage.",
+        "The treatment decision is based on the serum paracetamol concentration."
+      ]
+    },
+    {
+      "id": "N1", "language": "BG", "queryType": "Disease", "question": "Какво е синдром на Зарковски-Хелман?", "expectation": "Abstain"
+    },
+    {
+      "id": "N2", "language": "EN", "queryType": "Treatment", "question": "What is the recommended treatment for Varnholt-Mercer syndrome in children?", "expectation": "Abstain"
+    },
+    {
+      "id": "N3", "language": "BG", "queryType": "Disease", "question": "какво е синдром на корвалис?", "expectation": "Abstain"
+    },
+    {
+      "id": "N4", "language": "BG", "queryType": "Treatment", "question": "Лечение на болест на Хесмонд при кърмачета", "expectation": "Abstain"
+    },
+    {
+      "id": "N5", "language": "BG", "queryType": "Symptoms", "question": "Какви са симптомите на синдром на Телмарин-Остерлинг?", "expectation": "Abstain"
+    },
+    {
+      "id": "N6", "language": "EN", "queryType": "Disease", "question": "What causes Dorvik disease in newborns?", "expectation": "Abstain"
+    },
+    {
+      "id": "N7", "language": "EN", "queryType": "Symptoms", "question": "What are the symptoms of Korvalis-Ristolin syndrome?", "expectation": "Abstain"
+    },
+    {
+      "id": "N8", "language": "EN", "queryType": "GlobalSearch", "question": "Bramwell-Kraven disease in toddlers", "expectation": "Abstain"
+    },
+    {
+      "id": "N9", "language": "BG", "queryType": "Treatment", "question": "Каква е дозата на зелмифатин при деца?", "expectation": "Abstain"
+    },
+    {
+      "id": "N10", "language": "EN", "queryType": "Treatment", "question": "What is the paediatric dose of fenarex?", "expectation": "Abstain"
+    },
+    {
+      "id": "R1", "language": "BG", "queryType": "Disease", "question": "Какво е болест на Гоше?",
+      "relevantTerms": [["gaucher", "гоше"]],
+      "requiredFacts": [
+        "Болестта на Гоше е лизозомна болест на натрупване.",
+        "Дължи се на дефицит на ензима глюкоцереброзидаза.",
+        "Характерна находка е спленомегалия или хепатоспленомегалия."
+      ],
+      "forbiddenClaims": ["Болестта на Гоше се дължи на бактериална инфекция."]
+    },
+    {
+      "id": "R2", "language": "BG", "queryType": "Disease", "question": "Какво е синдром на Алпорт?",
+      "relevantTerms": [["alport", "алпорт"]],
+      "requiredFacts": [
+        "Синдромът на Алпорт е наследствен нефрит с хематурия.",
+        "Често се съчетава с нарушение на слуха."
+      ],
+      "forbiddenClaims": ["Синдромът на Алпорт е инфекциозно заболяване."]
+    },
+    {
+      "id": "R3", "language": "EN", "queryType": "Disease", "question": "What is Wiskott-Aldrich syndrome?",
+      "relevantTerms": [["wiskott"]],
+      "requiredFacts": [
+        "It is an X-linked immunodeficiency.",
+        "Its triad is immunodeficiency, thrombocytopenia and eczema."
+      ],
+      "forbiddenClaims": ["Wiskott-Aldrich syndrome is caused by a viral infection."]
+    },
+    {
+      "id": "R4", "language": "BG", "queryType": "Disease", "question": "Какво е болест на Уилсън?",
+      "relevantTerms": [["wilson", "уилсън"]],
+      "requiredFacts": [
+        "Болестта на Уилсън е наследствено нарушение на обмяната на медта.",
+        "Серумният церулоплазмин обикновено е понижен.",
+        "Характерна находка е пръстенът на Кайзер-Флайшер."
+      ],
+      "forbiddenClaims": ["Болестта на Уилсън се дължи на натрупване на желязо."]
+    },
+    {
+      "id": "R5", "language": "EN", "queryType": "Disease", "question": "What is Guillain-Barré syndrome?",
+      "relevantTerms": [["guillain", "гилен"]],
+      "requiredFacts": [
+        "It is an acute inflammatory polyneuropathy.",
+        "It causes ascending muscle weakness."
+      ],
+      "forbiddenClaims": ["Guillain-Barré syndrome is a primary muscle disease."]
+    },
+    {
+      "id": "R6", "language": "BG", "queryType": "Disease", "question": "Какво е синдром на Гудпасчър?",
+      "relevantTerms": [["goodpasture", "гудпасчър"]],
+      "requiredFacts": [
+        "Синдромът на Гудпасчър съчетава гломерулонефрит с белодробен кръвоизлив.",
+        "Доказват се антитела срещу гломерулната базална мембрана."
+      ],
+      "forbiddenClaims": ["Синдромът на Гудпасчър засяга само черния дроб."]
+    }
+  ]
+}

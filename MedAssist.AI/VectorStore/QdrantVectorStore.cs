@@ -237,12 +237,25 @@ public sealed class QdrantVectorStore : IVectorStore
             query: new Query { Fusion = Fusion.Rrf },
             prefetch: prefetch,
             filter: filter,
-            limit: (ulong)topK,
+            // Every fused point, not topK: the cut has to happen here, see TakeTopFused.
+            limit: prefetchLimit * (ulong)prefetch.Count,
             payloadSelector: new WithPayloadSelector { Enable = true },
             cancellationToken: cancellationToken);
 
-        return results.Select(MapToChunk).ToList();
+        return TakeTopFused(results, topK).Select(MapToChunk).ToList();
     }
+
+    /// <summary>
+    /// Cuts the fused list to <paramref name="topK"/> with a stable order. RRF scores depend only on
+    /// ranks, so ties are routine, and Qdrant returns tied points in a varying order: cutting there
+    /// made identical searches retrieve different chunks. Point id breaks the tie.
+    /// </summary>
+    public static IReadOnlyList<ScoredPoint> TakeTopFused(IEnumerable<ScoredPoint> fused, int topK) =>
+        fused
+            .OrderByDescending(p => p.Score)
+            .ThenBy(p => p.Id.ToString(), StringComparer.Ordinal)
+            .Take(topK)
+            .ToList();
 
     private static Filter? BuildFilter(LanguageFilter language, IReadOnlyList<string>? bookIds)
     {

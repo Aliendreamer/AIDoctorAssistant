@@ -1,0 +1,360 @@
+@page "/admin/evaluation/{Id:guid}"
+@using Microsoft.AspNetCore.Authorization
+@using MedAssist.Shared.Models
+@using MedAssist.Shared.Models.Evaluation
+@using MedAssist.Web.Services.Evaluation
+@attribute [Authorize(Roles = "Admin")]
+@layout AdminLayout
+@implements IDisposable
+@inject AdminEvaluationService Evaluations
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>MedAssist — Evaluation run</PageTitle>
+
+<p class="eval-back"><a href="/admin/evaluation">← All runs</a></p>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_detail is null)
+{
+    @if (_loading)
+    {
+        <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
+    }
+    else
+    {
+        <p class="text-muted">This run no longer exists.</p>
+    }
+}
+else
+{
+    var run = _detail.Run;
+    var comparison = _detail.Comparison;
+
+    <div class="eval-title">
+        <h1>@(string.IsNullOrEmpty(run.Note) ? "Evaluation run" : run.Note)</h1>
+        @if (run.Summary is not null)
+        {
+            <span class="status-pill @EvalFormat.VerdictClass(run.Verdict)">@EvalFormat.VerdictLabel(run.Verdict)</span>
+        }
+        else
+        {
+            <span class="status-pill @EvalFormat.StatusClass(run.Status)">@run.Status</span>
+        }
+    </div>
+    <p class="eval-lead">
+        @run.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · @run.StartedBy · @run.Snapshot.Model
+        @if (run.Snapshot.ReviewedCases < run.Snapshot.TotalCases)
+        {
+            <text> · @run.Snapshot.ReviewedCases of @run.Snapshot.TotalCases references reviewed</text>
+        }
+    </p>
+
+    @if (run.Error is not null)
+    {
+        <div class="alert alert-danger">@run.Error</div>
+    }
+
+    @if (EvalFormat.IsActive(run.Status))
+    {
+        <section class="card eval-card" aria-live="polite">
+            <div class="eval-progress-head">
+                <b>@(string.IsNullOrEmpty(run.Phase) ? "Starting" : run.Phase)</b>
+                <span class="num">@run.Done / @run.Total</span>
+            </div>
+            <div class="eval-progress"><span style="width:@EvalFormat.ProgressPercent(run.Done, run.Total)%"></span></div>
+        </section>
+    }
+
+    @if (run.Summary is not null)
+    {
+        <div class="eval-actions">
+            <label class="form-label mb-0" for="eval-baseline">Compare with</label>
+            <select id="eval-baseline" class="form-select form-select-sm" value="@(_detail.BaselineId?.ToString() ?? string.Empty)" @onchange="BaselineChangedAsync">
+                <option value="">No baseline</option>
+                @foreach (var choice in _detail.BaselineChoices)
+                {
+                    <option value="@choice.Id">
+                        @choice.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") — @(string.IsNullOrEmpty(choice.Note) ? choice.Snapshot.Model : choice.Note)@(choice.IsBaseline ? " (baseline)" : "")
+                    </option>
+                }
+            </select>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="() => ToggleBaselineAsync(!run.IsBaseline)">
+                @(run.IsBaseline ? "Unset baseline" : "Set as baseline")
+            </button>
+        </div>
+    }
+
+    @if (comparison is not null)
+    {
+        @if (comparison.GoldenSetChanged)
+        {
+            <div class="eval-note">The reference answers changed between these runs, so part of the movement may come from the references.</div>
+        }
+
+        @if (comparison.JudgeChanged)
+        {
+            <div class="eval-note">The judge model differs between these runs, so judged scores were measured differently.</div>
+        }
+
+        @if (comparison.Verdict == EvalVerdict.Inconclusive)
+        {
+            <div class="eval-note">
+                Nothing got worse, but this run cannot rule out a regression: correctness or grounding evidence is
+                missing. Check the judge failures, or re-run with the judge on.
+            </div>
+        }
+
+        @if (comparison.Settings.Count > 0)
+        {
+            <h2 class="eval-h2">What changed</h2>
+            <table class="table eval-compact">
+                <thead><tr><th>Setting</th><th>Baseline</th><th>This run</th></tr></thead>
+                <tbody>
+                    @foreach (var setting in comparison.Settings)
+                    {
+                        <tr><td>@setting.Label</td><td class="num">@setting.Baseline</td><td class="num">@setting.Current</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        @if (comparison.Cases.Count > 0)
+        {
+            <h2 class="eval-h2">Questions that flipped</h2>
+            <table class="table eval-compact">
+                <tbody>
+                    @foreach (var change in comparison.Cases)
+                    {
+                        <tr>
+                            <td class="num">@change.CaseId</td>
+                            <td><span class="@(change.NowPasses ? "eval-better" : "eval-worse")">@(change.NowPasses ? "Now passes" : "Now fails")</span></td>
+                            <td>@change.Question<div class="eval-reasons">@string.Join("; ", change.Reasons)</div></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <div class="eval-metrics">
+            @foreach (var group in comparison.Metrics.GroupBy(m => m.Group))
+            {
+                <section class="card eval-card">
+                    <h2 class="eval-h2">@group.Key</h2>
+                    <table class="eval-metric-table">
+                        <tbody>
+                            @foreach (var metric in group)
+                            {
+                                <tr title="@metric.Description">
+                                    <td>@metric.Label</td>
+                                    <td class="num">@EvalFormat.Value(metric.Unit, metric.Current)</td>
+                                    <td class="num @EvalFormat.ChangeClass(metric.Change)">@EvalFormat.Delta(metric)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </section>
+            }
+        </div>
+    }
+
+    <h2 class="eval-h2 mt-4">Questions</h2>
+    @foreach (var result in _detail.Cases)
+    {
+        <details class="eval-case">
+            <summary>
+                <span class="num">@result.CaseId</span>
+                <span class="status-pill @(result.ConfirmedPass ? "is-ok" : result.Inconclusive ? "is-working" : "is-failed")">
+                    @(result.ConfirmedPass ? "Pass" : result.Inconclusive ? "Not judged" : "Fail")
+                </span>
+                <span class="eval-case-q">@result.Question</span>
+                <span class="num eval-case-meta">@EvalFormat.Seconds(result.LatencySeconds)</span>
+            </summary>
+
+            @if (result.FailureReasons.Count > 0)
+            {
+                <ul class="eval-reasons">
+                    @foreach (var reason in result.FailureReasons)
+                    {
+                        <li>@reason</li>
+                    }
+                </ul>
+            }
+            @if (result.JudgeError is not null)
+            {
+                <p class="eval-reasons">Not judged: @result.JudgeError</p>
+            }
+
+            <h3 class="eval-h3">Answer</h3>
+            <p class="eval-answer">@result.Answer</p>
+
+            @if (result.Facts.Count > 0)
+            {
+                <h3 class="eval-h3">Reference facts</h3>
+                <table class="table eval-compact">
+                    <thead><tr><th>Fact</th><th>In excerpts</th><th>In answer</th></tr></thead>
+                    <tbody>
+                        @foreach (var fact in result.Facts)
+                        {
+                            <tr><td>@fact.Fact</td><td class="@Mark(fact.InExcerpts)">@YesNo(fact.InExcerpts)</td><td class="@Mark(fact.InAnswer)">@YesNo(fact.InAnswer)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            @if (result.Claims.Any(c => !c.Supported))
+            {
+                <h3 class="eval-h3">Unsupported sentences</h3>
+                <ul class="eval-reasons">
+                    @foreach (var claim in result.Claims.Where(c => !c.Supported))
+                    {
+                        <li>@claim.Claim</li>
+                    }
+                </ul>
+            }
+
+            <h3 class="eval-h3">Pipeline</h3>
+            <p class="eval-hint">
+                Outcome @result.Outcome · search query “@result.SearchQuery” · @result.PromptTokens prompt tokens@(result.PromptTokensEstimated ? " (estimated)" : "") ·
+                @result.CompletionTokens output tokens · @result.ExcerptsDropped excerpts dropped by the budget
+            </p>
+            @foreach (var excerpt in result.Excerpts)
+            {
+                <details class="eval-excerpt">
+                    <summary><span class="num">[@excerpt.Number]</span> @excerpt.Source <span class="@(excerpt.Relevant ? "eval-better" : "eval-worse")">@(excerpt.Relevant ? "relevant" : "off-topic")</span></summary>
+                    <p class="eval-answer">@excerpt.Text</p>
+                </details>
+            }
+        </details>
+    }
+
+    @if (!EvalFormat.IsActive(run.Status))
+    {
+        <details class="eval-case mt-4">
+            <summary>Run configuration</summary>
+            <table class="table eval-compact">
+                <tbody>
+                    @foreach (var (label, value) in run.Snapshot.ToRows())
+                    {
+                        <tr><td>@label</td><td class="num">@value</td></tr>
+                    }
+                </tbody>
+            </table>
+        </details>
+
+        <div class="mt-3">
+            @if (_confirmDelete)
+            {
+                <button class="btn btn-sm btn-danger" @onclick="DeleteAsync">Confirm delete</button>
+                <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="() => _confirmDelete = false">Keep</button>
+            }
+            else
+            {
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _confirmDelete = true">Delete run</button>
+            }
+        </div>
+    }
+}
+
+@code {
+    private static readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(3);
+
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly CancellationTokenSource _disposed = new();
+    private EvalRunDetail? _detail;
+    private Guid? _baselineChoice;
+    private bool _loading = true;
+    private bool _confirmDelete;
+    private bool _polling;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            await RefreshAsync();
+            if (!_polling && _detail is not null && EvalFormat.IsActive(_detail.Run.Status))
+            {
+                _polling = true;
+                _ = PollAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load the run: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RefreshAsync() => _detail = await Evaluations.GetDetailAsync(Id, _baselineChoice);
+
+    private async Task PollAsync()
+    {
+        using var timer = new PeriodicTimer(_pollInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_disposed.Token))
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshAsync();
+                    StateHasChanged();
+                });
+                if (_detail is null || !EvalFormat.IsActive(_detail.Run.Status))
+                {
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page closed.
+        }
+        catch (Exception ex)
+        {
+            _error = $"Lost contact with the run: {ex.Message}";
+            await InvokeAsync(StateHasChanged);
+        }
+        finally
+        {
+            _polling = false;
+        }
+    }
+
+    private async Task BaselineChangedAsync(ChangeEventArgs args)
+    {
+        // Guid.Empty matches no run, which is how "No baseline" differs from "not chosen yet".
+        _baselineChoice = Guid.TryParse(args.Value?.ToString(), out var id) ? id : Guid.Empty;
+        await RefreshAsync();
+    }
+
+    private async Task ToggleBaselineAsync(bool isBaseline)
+    {
+        await Evaluations.SetBaselineAsync(Id, isBaseline);
+        await RefreshAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        await Evaluations.DeleteAsync(Id);
+        Navigation.NavigateTo("/admin/evaluation");
+    }
+
+    private static string YesNo(bool? value) => value switch { true => "Yes", false => "No", _ => "—" };
+
+    private static string Mark(bool? value) => value switch { true => "eval-better", false => "eval-worse", _ => "eval-same" };
+
+    public void Dispose()
+    {
+        _disposed.Cancel();
+        _disposed.Dispose();
+    }
+}

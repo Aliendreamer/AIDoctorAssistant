@@ -33,6 +33,35 @@ internal sealed class CandidateRetriever(
         return chunks;
     }
 
+    /// <summary>The spellings the books use for the named conditions; see <see cref="ConditionNameGuard"/>.</summary>
+    public async Task<IReadOnlyList<string>> FindBookSpellingsAsync(
+        IReadOnlyList<IReadOnlyList<string>> names,
+        CancellationToken cancellationToken)
+    {
+        if (names.Count == 0)
+        {
+            return [];
+        }
+
+        var words = await sparseVectorizer.GetWordWeightsAsync(cancellationToken);
+        return ConditionNameGuard.FindBookSpellings(names, words.Keys);
+    }
+
+    /// <summary>The books' Bulgarian terms for an English question; see <see cref="BookTermLookup"/>.</summary>
+    public async Task<IReadOnlyList<string>> FindBookTermsAsync(
+        string question,
+        IReadOnlyList<IReadOnlyList<string>> names,
+        CancellationToken cancellationToken)
+    {
+        if (!BookTermLookup.Applies(question))
+        {
+            return [];
+        }
+
+        var words = await sparseVectorizer.GetWordWeightsAsync(cancellationToken);
+        return BookTermLookup.Find(question, names, words);
+    }
+
     /// <summary>
     /// For each unique (chapter, section, bookId) among the summary candidates — which act as
     /// retrieval triggers — pull all regular chunks from that section and merge them in, deduped by

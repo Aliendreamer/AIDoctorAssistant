@@ -48,6 +48,12 @@ public sealed partial class SparseVectorizer : ISparseVectorizer
         return Compute(text, vocab);
     }
 
+    public async Task<IReadOnlyDictionary<string, float>> GetWordWeightsAsync(CancellationToken cancellationToken = default)
+    {
+        var vocab = await EnsureLoadedAsync(cancellationToken);
+        return vocab.TermIds.ToDictionary(t => t.Key, t => vocab.IdfWeights[t.Value]);
+    }
+
     // Caching is the store's responsibility (the singleton Bm25VocabCache in production); this stays
     // a stateless computer so it can safely be a singleton itself (audit P1-9).
     private Task<BM25VocabSnapshot> EnsureLoadedAsync(CancellationToken cancellationToken)

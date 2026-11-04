@@ -16,6 +16,9 @@ public abstract partial class RagPluginBase
     private readonly RagOptions _options;
     private readonly ILogger<RagPluginBase> _logger;
 
+    private const string _notCoveredAnswer =
+        "The indexed books don't contain sufficiently relevant information to answer this question. Try rephrasing or consult an external source.";
+
     // Each strategy widens the search space progressively.
     // Strategies are indexed by iteration number (0 = first fallback pass after initial search).
     private static readonly RetryStrategy[] _strategies =
@@ -58,6 +61,24 @@ public abstract partial class RagPluginBase
         // follow-ups self-contained, so retrieval and reranking see the corpus language.
         var searchQuery = await PrepareSearchQueryAsync(query, conversationHistory, cancellationToken);
 
+        // The books mostly spell eponyms in Latin, so add their spelling for retrieval and reranking.
+        var namedConditions = ConditionNameGuard.ExtractNames(query);
+        var spellings = await _retriever.FindBookSpellingsAsync(namedConditions, cancellationToken);
+
+        // The model invents Bulgarian medical words, so add the books' own term for each one it translated.
+        var bookTerms = await _retriever.FindBookTermsAsync(query, namedConditions, cancellationToken);
+        var additions = spellings.Concat(bookTerms).ToList();
+        if (additions.Count > 0)
+        {
+            searchQuery = $"{searchQuery} {string.Join(' ', additions)}";
+        }
+
+        var trace = RagRunScope.Current?.Trace;
+        if (trace is not null)
+        {
+            trace.SearchQuery = searchQuery;
+        }
+
         var expandedTerms = await _dictionary.ExpandQueryAsync(searchQuery, cancellationToken);
 
         // Search with both original and rewritten query — the rewrite enriches semantics but the
@@ -65,11 +86,12 @@ public abstract partial class RagPluginBase
         var initialTerms = searchQuery == query
             ? (IReadOnlyList<string>)[query]
             : [query, searchQuery];
-        var candidates = await _retriever.GatherAsync(initialTerms, langFilter, bookIds, topK: 5, cancellationToken);
+        var candidates = await _retriever.GatherAsync(initialTerms, langFilter, bookIds, RagRunScope.InitialTopK, cancellationToken);
         candidates = await _retriever.ExpandBySectionAsync(candidates, cancellationToken);
 
         if (candidates.Count == 0)
         {
+            SetOutcome(RagOutcome.NoCandidates);
             return new QueryResult { Answer = "No relevant information found in the indexed books." };
         }
 
@@ -81,7 +103,9 @@ public abstract partial class RagPluginBase
         {
             _logger.LogInformation("Initial score {Score:F3} below MinRetryScore {Threshold} — skipping retries, flagging web fallback",
                 initialScore, _options.MinRetryScore);
-            return new QueryResult { RequiresWebFallback = true, Answer = "The indexed books don't contain sufficiently relevant information to answer this question. Try rephrasing or consult an external source." };
+            RecordRanking(scored);
+            SetOutcome(RagOutcome.WebFallback);
+            return new QueryResult { RequiresWebFallback = true, Answer = _notCoveredAnswer };
         }
 
         var maxIter = Math.Min(_options.MaxIterations, 5);
@@ -111,6 +135,8 @@ public abstract partial class RagPluginBase
             scored = await QueryPreparation.RerankByLanguageAsync(_reranker, searchQuery, query, candidates, cancellationToken);
         }
 
+        RecordRanking(scored);
+
         var topScore = scored.Count > 0 ? scored[0].Score : float.NegativeInfinity;
         // Debug level: query text can be PHI, so it stays out of default (Information) logs (audit P2-9).
         _logger.LogDebug("Reranker top score for query '{Query}' (search: '{SearchQuery}'): {Score:F3} (threshold: {Threshold})",
@@ -119,7 +145,8 @@ public abstract partial class RagPluginBase
         // Reject if the best result still doesn't meet the answer quality floor
         if (scored.Count == 0 || topScore < _options.MinAnswerScore)
         {
-            return new QueryResult { Answer = "The indexed books don't contain sufficiently relevant information to answer this question. Try rephrasing or consult an external source." };
+            SetOutcome(RagOutcome.BelowAnswerFloor);
+            return new QueryResult { Answer = _notCoveredAnswer };
         }
 
         // Guard against domain-drift: if the query contains specific Latin terms (medical eponyms,
@@ -134,7 +161,8 @@ public abstract partial class RagPluginBase
             {
                 _logger.LogDebug("Latin term check failed for query '{Query}' — terms [{Terms}] absent from top chunks",
                     query, string.Join(", ", latinTerms));
-                return new QueryResult { Answer = "The indexed books don't contain sufficiently relevant information to answer this question. Try rephrasing or consult an external source." };
+                SetOutcome(RagOutcome.LatinTermGuard);
+                return new QueryResult { Answer = _notCoveredAnswer };
             }
         }
 
@@ -142,8 +170,17 @@ public abstract partial class RagPluginBase
         var topChunks = scored
             .Select(s => s.Chunk)
             .Where(c => !c.IsSummary)
-            .Take(5)
+            .Take(RagRunScope.MaxExcerpts)
             .ToList();
+
+        // Reranker scores can't tell an invented disease from a real one, so a condition the question
+        // names has to actually appear in what the answer would be built from.
+        if (!ConditionNameGuard.AllAppearIn(namedConditions, topChunks.Select(c => c.Text)))
+        {
+            _logger.LogDebug("Condition named in query '{Query}' is absent from the excerpts", query);
+            SetOutcome(RagOutcome.ConditionNotInExcerpts);
+            return new QueryResult { Answer = _notCoveredAnswer };
+        }
 
         return await BuildResultAsync(query, topChunks, conversationHistory, cancellationToken);
     }
@@ -167,11 +204,13 @@ public abstract partial class RagPluginBase
     {
         if (chunks.Count == 0)
         {
+            SetOutcome(RagOutcome.NoCandidates);
             return new QueryResult { Answer = "No relevant information found in the indexed books." };
         }
 
         // Fit the prompt to the context window first: dropped excerpts must not appear in `sources`.
-        var (excerpts, history) = AnswerPromptBuilder.FitToBudget(Profile, query, chunks, conversationHistory);
+        var (excerpts, history) = AnswerPromptBuilder.FitToBudget(
+            Profile, query, chunks, conversationHistory, RagRunScope.PromptBudgetTokens);
 
         // Citation-marker contract (change cited-answer-markers): `sources` and the numbered
         // excerpts in the prompt are both built from `excerpts` in the SAME order, so excerpt [n]
@@ -195,8 +234,44 @@ public abstract partial class RagPluginBase
         PromptMetrics.Record(GetType().Name.Replace("Plugin", string.Empty, StringComparison.Ordinal), prompt, response);
         var answer = MarkdownStripper.Strip(response.Content ?? "Unable to generate a response.");
 
+        if (RagRunScope.Current?.Trace is { } trace)
+        {
+            (trace.PromptTokens, trace.PromptTokensEstimated) = PromptMetrics.PromptTokens(prompt, response);
+            trace.CompletionTokens = PromptMetrics.CompletionTokens(response);
+            trace.Excerpts = excerpts.Select(c => ToTraced(c, 0f)).ToList();
+            trace.ExcerptsDropped = chunks.Count - excerpts.Count;
+            trace.Outcome = RagOutcome.Answered;
+        }
+
         return new QueryResult { Answer = answer, Sources = sources };
     }
+
+    private static void SetOutcome(RagOutcome outcome)
+    {
+        if (RagRunScope.Current?.Trace is { } trace)
+        {
+            trace.Outcome = outcome;
+        }
+    }
+
+    private static void RecordRanking(IReadOnlyList<ScoredChunk> scored)
+    {
+        if (RagRunScope.Current?.Trace is { } trace)
+        {
+            trace.Ranked = scored.Where(s => !s.Chunk.IsSummary).Select(s => ToTraced(s.Chunk, s.Score)).ToList();
+        }
+    }
+
+    private static TracedChunk ToTraced(MedicalChunk chunk, float score) => new()
+    {
+        BookTitle = chunk.BookTitle,
+        ChapterTitle = chunk.ChapterTitle,
+        SectionTitle = chunk.SectionTitle,
+        PageStart = chunk.PageStart,
+        PageEnd = chunk.PageEnd,
+        Score = score,
+        Text = chunk.Text,
+    };
 
     private static LanguageFilter ParseLanguage(string language) => language.ToLowerInvariant() switch
     {
@@ -220,7 +295,7 @@ public abstract partial class RagPluginBase
             QueryPreparation.BuildPrompt(query, conversationHistory), QueryPreparation.Settings,
             cancellationToken: cancellationToken);
         // Strip any reasoning block so a qwen3 <think>…</think> can't leak into the search query.
-        var prepared = MarkdownStripper.Strip(response.Content ?? string.Empty).Trim();
+        var prepared = QueryPreparation.Shorten(MarkdownStripper.Strip(response.Content ?? string.Empty));
 
         _logger.LogDebug("Search query prepared: '{Original}' → '{Prepared}'", query, prepared);
         return string.IsNullOrWhiteSpace(prepared) ? query : prepared;

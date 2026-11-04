@@ -19,6 +19,9 @@ public static class PromptConstants
     /// <summary>Output cap for the query-preparation call — a one-line search query, never reasoning.</summary>
     public const int QueryPrepMaxTokens = 96;
 
+    /// <summary>Longest prepared search query kept, in words.</summary>
+    public const int QueryPrepMaxWords = 16;
+
     /// <summary>
     /// Tokens kept free in the context window for the generated answer. Golden run 3 answers decoded
     /// 360–1,100 tokens, with one at 2,116.
@@ -31,4 +34,10 @@ public static class PromptConstants
     /// over-counts (the safe direction). 3 under-counted Cyrillic by ~40% and prompts overflowed.
     /// </summary>
     public const int EstimatedCharsPerToken = 2;
+
+    /// <summary>Most excerpts offered to the answer prompt, before the token budget is applied.</summary>
+    public const int MaxExcerpts = 5;
+
+    /// <summary><c>topK</c> of the first retrieval pass.</summary>
+    public const int InitialTopK = 5;
 }

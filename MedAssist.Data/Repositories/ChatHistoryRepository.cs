@@ -39,4 +39,12 @@ public sealed class ChatHistoryRepository(MedAssistDbContext db)
             .Where(m => m.UserId == userId && m.QueryType == queryType)
             .ExecuteDeleteAsync(ct);
     }
+
+    /// <summary>Deletes every message of the users whose id starts with <paramref name="userIdPrefix"/>.</summary>
+    public async Task ClearByUserPrefixAsync(string userIdPrefix, CancellationToken ct = default)
+    {
+        await db.ChatMessages
+            .Where(m => m.UserId.StartsWith(userIdPrefix))
+            .ExecuteDeleteAsync(ct);
+    }
 }

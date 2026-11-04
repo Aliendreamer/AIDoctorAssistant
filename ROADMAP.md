@@ -92,8 +92,8 @@ Current embedder is `intfloat/multilingual-e5-large` (local ONNX, 1024-dim, EN/B
 1024-dim Qdrant collection. These are stronger general multilingual embedders to trial for better
 recall while keeping Bulgarian — a different axis from the *medical* embedder above (these keep BG
 rather than risking it). Every swap requires re-embedding the whole corpus; a dimension change also
-means recreating the Qdrant collection. Prefer a held-out EN + BG clinical query set and measure
-recall/nDCG before committing.
+means recreating the Qdrant collection. Measure each candidate on `/admin/evaluation` (Hit@5, MRR,
+nDCG@5, fact coverage) before committing.
 
 - **`multilingual-e5-large` (current) / e5-multilingual family** — baseline. Cheapest upgrade within
   the family is `multilingual-e5-large-instruct` (same arch, 1024-dim, drop-in — no collection change,

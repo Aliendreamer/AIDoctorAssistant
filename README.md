@@ -202,6 +202,25 @@ and you will be redirected to the login screen automatically.
 | `/admin/books/upload` | Admin | Upload a new PDF book |
 | `/admin/users` | Admin | List user accounts, delete users |
 | `/admin/users/create` | Admin | Create a new Doctor or Admin account |
+| `/admin/evaluation` | Admin | Run the golden questions, try model and context settings, compare runs |
+
+### Evaluation
+
+Run an evaluation from `/admin/evaluation` after any prompt, model, retrieval or context change. It sends the
+golden questions in `MedAssist.AI/Evaluation/golden-set.json` through the live pipeline, then a local LLM judge
+scores the answers. Each run is compared with the baseline, so the page shows what changed, which questions
+flipped, and whether quality regressed.
+
+- **Try a setting:** fill in the model or context fields. They apply to that run only; empty fields use the
+  production values.
+- **Read a lost fact:** *lost in retrieval* means it never reached the model, so look at search. *Lost in
+  generation* means the model had it and dropped it, so look at the prompt or context.
+- **Set a baseline:** pin a good run from its page. Otherwise each run compares with the one before it.
+- **Compare like with like:** keep the judge model the same across runs you compare.
+
+A full run takes roughly 10–15 minutes and is best started when nobody is using the system, because a different
+model makes Ollama swap models. Correctness scores depend on the reference facts, which need a physician's review
+(`reviewed` in the golden set); the page shows how many are still unreviewed.
 
 ### Default credentials
 

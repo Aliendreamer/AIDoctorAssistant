@@ -24,6 +24,13 @@ public static class PromptMetrics
             new KeyValuePair<string, object?>("estimated", estimated));
     }
 
+    /// <summary>Output tokens the model reported for a call, or 0 when the connector did not surface them.</summary>
+    internal static long CompletionTokens(ChatMessageContent response) =>
+        response.Metadata?.TryGetValue("Usage", out var usage) == true
+        && usage is UsageDetails { OutputTokenCount: > 0 and var reported }
+            ? reported
+            : 0;
+
     // SK's IChatClient adapter stores Microsoft.Extensions.AI UsageDetails under Metadata["Usage"];
     // OllamaSharp fills InputTokenCount from Ollama's prompt_eval_count.
     internal static (long Tokens, bool Estimated) PromptTokens(ChatHistory prompt, ChatMessageContent response)

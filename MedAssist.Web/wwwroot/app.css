@@ -486,3 +486,70 @@ main > .top-row nav a:hover { color: var(--text); border-bottom-color: var(--acc
 .valid.modified:not([type=checkbox]) { outline: 1px solid var(--success); }
 .invalid { outline: 1px solid var(--danger); }
 .validation-message { color: var(--danger); }
+
+/* ── Evaluation ────────────────────────────────────────── */
+.eval-lead { color: var(--muted); max-width: 70ch; }
+.eval-back { font-size: 0.85rem; margin-bottom: 0.4rem; }
+.eval-title { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; }
+.eval-h2 { font-size: 0.95rem; font-weight: 650; margin: 0 0 0.75rem; color: var(--text); }
+.eval-h3 {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 1rem 0 0.4rem;
+}
+.eval-card { padding: 1.1rem 1.25rem; margin-bottom: 1rem; }
+.eval-note {
+    color: var(--warn);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-line);
+    border-radius: var(--r-sm);
+    padding: 0.65rem 0.9rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+.eval-note code { color: inherit; }
+.eval-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.85rem; }
+.eval-hint { color: var(--faint); font-size: 0.8rem; margin: 0.6rem 0 0.9rem; }
+.eval-tag {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--accent);
+    border: 1px solid var(--accent-line);
+    border-radius: var(--r-sm);
+    padding: 0.05rem 0.4rem;
+    margin-left: 0.35rem;
+}
+.eval-scroll { overflow-x: auto; }
+.eval-progress-head { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; }
+.eval-progress-head a { margin-left: 0.5rem; }
+.eval-progress { height: 6px; background: var(--raised); border-radius: 3px; overflow: hidden; }
+.eval-progress span { display: block; height: 100%; background: var(--accent); transition: width 0.4s ease; }
+.eval-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin: 0.5rem 0 1.1rem; }
+.eval-actions .form-select { width: auto; max-width: 26rem; }
+.eval-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.eval-metrics .eval-card { margin-bottom: 0; }
+.eval-metric-table { width: 100%; font-size: 0.875rem; }
+.eval-metric-table td { padding: 0.22rem 0; }
+.eval-metric-table td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 0.75rem; }
+.eval-better { color: var(--success); }
+.eval-worse { color: var(--danger); }
+.eval-same { color: var(--muted); }
+.eval-compact { font-size: 0.85rem; }
+.eval-reasons { color: var(--danger); font-size: 0.82rem; margin: 0.25rem 0 0; }
+.eval-case {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 0.55rem 0.85rem;
+    margin-bottom: 0.45rem;
+}
+.eval-case > summary { display: flex; align-items: center; gap: 0.65rem; cursor: pointer; }
+.eval-case .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.eval-case-q { flex: 1; min-width: 0; }
+.eval-case-meta { color: var(--muted); font-size: 0.8rem; }
+.eval-answer { white-space: pre-wrap; font-size: 0.875rem; line-height: 1.6; margin: 0.3rem 0; }
+.eval-excerpt { font-size: 0.82rem; margin: 0.2rem 0; }
+.eval-excerpt > summary { cursor: pointer; color: var(--muted); }

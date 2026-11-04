@@ -1,0 +1,352 @@
+@page "/admin/evaluation"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using MedAssist.Shared.Constants
+@using MedAssist.Shared.Models
+@using MedAssist.Shared.Models.Evaluation
+@using MedAssist.Web.Services.Evaluation
+@attribute [Authorize(Roles = "Admin")]
+@layout AdminLayout
+@implements IDisposable
+@inject AdminEvaluationService Evaluations
+@inject AuthenticationStateProvider Auth
+@rendermode InteractiveServer
+
+<PageTitle>MedAssist — Evaluation</PageTitle>
+
+<h1>Evaluation</h1>
+<p class="eval-lead">
+    Runs the golden questions through the live pipeline and scores correctness, grounding, retrieval and format.
+    Run it after every change and compare with the baseline.
+</p>
+
+@if (_defaults is { } d && d.ReviewedCases < d.TotalCases)
+{
+    <div class="eval-note">
+        <b>@(d.TotalCases - d.ReviewedCases) of @d.TotalCases reference answers are unreviewed.</b>
+        Correctness scores are only as good as these references: have a physician check
+        <code>MedAssist.AI/Evaluation/golden-set.json</code> against the books.
+    </div>
+}
+
+@if (_active is { } active)
+{
+    <section class="card eval-card" aria-live="polite">
+        <div class="eval-progress-head">
+            <span>
+                <b>@(string.IsNullOrEmpty(active.Phase) ? "Starting" : active.Phase)</b>
+                <a href="/admin/evaluation/@active.Id">@(string.IsNullOrEmpty(active.Note) ? "Current run" : active.Note)</a>
+            </span>
+            <span class="num">@active.Done / @active.Total</span>
+        </div>
+        <div class="eval-progress"><span style="width:@EvalFormat.ProgressPercent(active.Done, active.Total)%"></span></div>
+        <div class="mt-3">
+            <button class="btn btn-sm btn-outline-secondary" disabled="@_cancelling" @onclick="() => Cancel(active.Id)">
+                @(_cancelling ? "Cancelling…" : "Cancel run")
+            </button>
+        </div>
+    </section>
+}
+else
+{
+    <section class="card eval-card">
+        <h2 class="eval-h2">New run</h2>
+        <div class="mb-3">
+            <label class="form-label" for="eval-note">What changed?</label>
+            <input id="eval-note" class="form-control" placeholder="e.g. raised excerpts to 8" @bind="_form.Note" />
+        </div>
+
+        <div class="eval-grid">
+            <div>
+                <label class="form-label" for="eval-model">Answer model</label>
+                <input id="eval-model" class="form-control" list="eval-models" placeholder="@_defaults?.DefaultModel" @bind="_form.Model" />
+            </div>
+            <div>
+                <label class="form-label" for="eval-judge">Judge model</label>
+                <input id="eval-judge" class="form-control" list="eval-models" placeholder="@_defaults?.DefaultModel"
+                       disabled="@(!_form.RunJudge)" @bind="_form.JudgeModel" />
+            </div>
+            <datalist id="eval-models">
+                @foreach (var model in _defaults?.Models ?? [])
+                {
+                    <option value="@model"></option>
+                }
+            </datalist>
+            <div>
+                <label class="form-label" for="eval-ctx">Context window</label>
+                <input id="eval-ctx" type="number" min="1024" class="form-control" placeholder="@PromptConstants.ContextWindowTokens" @bind="_form.ContextWindow" />
+            </div>
+            <div>
+                <label class="form-label" for="eval-reserve">Answer reserve</label>
+                <input id="eval-reserve" type="number" min="128" class="form-control" placeholder="@PromptConstants.AnswerReserveTokens" @bind="_form.AnswerReserve" />
+            </div>
+            <div>
+                <label class="form-label" for="eval-excerpts">Max excerpts</label>
+                <input id="eval-excerpts" type="number" min="1" class="form-control" placeholder="@PromptConstants.MaxExcerpts" @bind="_form.MaxExcerpts" />
+            </div>
+            <div>
+                <label class="form-label" for="eval-topk">Retrieval top-K</label>
+                <input id="eval-topk" type="number" min="1" class="form-control" placeholder="@PromptConstants.InitialTopK" @bind="_form.TopK" />
+            </div>
+            <div>
+                <label class="form-label" for="eval-history">History budget (chars)</label>
+                <input id="eval-history" type="number" min="0" class="form-control" placeholder="@PromptConstants.HistoryCharBudget" @bind="_form.HistoryBudget" />
+            </div>
+            <div>
+                <label class="form-label" for="eval-temp">Temperature</label>
+                <input id="eval-temp" type="number" min="0" max="2" step="0.1" class="form-control" placeholder="model default" @bind="_form.Temperature" />
+            </div>
+        </div>
+        <p class="eval-hint">Empty fields use the production value. Web search is always off during a run.</p>
+
+        <div class="form-check mb-3">
+            <input id="eval-run-judge" type="checkbox" class="form-check-input" @bind="_form.RunJudge" />
+            <label class="form-check-label" for="eval-run-judge">
+                Judge correctness and grounding (slower; without it only retrieval and format are scored)
+            </label>
+        </div>
+
+        <button class="btn btn-primary" disabled="@_starting" @onclick="StartAsync">
+            @(_starting ? "Starting…" : "Run evaluation")
+        </button>
+    </section>
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<h2 class="eval-h2 mt-4">Runs</h2>
+@if (_loading)
+{
+    <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
+}
+else if (_runs.Count == 0)
+{
+    <p class="text-muted">No runs yet. Your first completed run becomes the starting point for comparisons.</p>
+}
+else
+{
+    <div class="eval-scroll">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Started</th>
+                    <th>Change</th>
+                    <th>Model</th>
+                    <th>Context</th>
+                    <th>Passed</th>
+                    <th>Fact recall</th>
+                    <th>Faithful</th>
+                    <th>Hit@@5</th>
+                    <th>Latency</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var run in _runs)
+                {
+                    <tr>
+                        <td class="num"><a href="/admin/evaluation/@run.Id">@run.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</a></td>
+                        <td>
+                            @(string.IsNullOrEmpty(run.Note) ? "—" : run.Note)
+                            @if (run.IsBaseline)
+                            {
+                                <span class="eval-tag">Baseline</span>
+                            }
+                        </td>
+                        <td class="num">@run.Snapshot.Model</td>
+                        <td class="num">@run.Snapshot.ContextWindowTokens</td>
+                        @if (run.Summary is { } s)
+                        {
+                            <td class="num">@s.Passed/@(s.Cases - s.Inconclusive)</td>
+                            <td class="num">@EvalFormat.Percent(s.FactRecall)</td>
+                            <td class="num">@EvalFormat.Percent(s.Faithfulness)</td>
+                            <td class="num">@EvalFormat.Percent(s.HitAtK)</td>
+                            <td class="num">@EvalFormat.Seconds(s.MeanLatencySeconds)</td>
+                            <td><span class="status-pill @EvalFormat.VerdictClass(run.Verdict)">@EvalFormat.VerdictLabel(run.Verdict)</span></td>
+                        }
+                        else
+                        {
+                            <td colspan="5"></td>
+                            <td><span class="status-pill @EvalFormat.StatusClass(run.Status)">@run.Status</span></td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private static readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(3);
+
+    private sealed class RunForm
+    {
+        public string Note { get; set; } = string.Empty;
+        public string? Model { get; set; }
+        public string? JudgeModel { get; set; }
+        public int? ContextWindow { get; set; }
+        public int? AnswerReserve { get; set; }
+        public int? MaxExcerpts { get; set; }
+        public int? TopK { get; set; }
+        public int? HistoryBudget { get; set; }
+        public double? Temperature { get; set; } = EvaluationConstants.DefaultTemperature;
+        public bool RunJudge { get; set; } = true;
+    }
+
+    private readonly RunForm _form = new();
+    private readonly CancellationTokenSource _disposed = new();
+    private EvalFormDefaults? _defaults;
+    private IReadOnlyList<EvalRunView> _runs = [];
+    private EvalRunView? _active;
+    private bool _loading = true;
+    private bool _starting;
+    private bool _cancelling;
+    private bool _polling;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _defaults = await Evaluations.GetFormDefaultsAsync();
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load evaluations: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _runs = await Evaluations.ListAsync();
+        _active = _runs.FirstOrDefault(r => EvalFormat.IsActive(r.Status) && Evaluations.IsExecuting(r.Id));
+        if (_active is null)
+        {
+            _cancelling = false;
+        }
+        else
+        {
+            StartPolling();
+        }
+    }
+
+    private void StartPolling()
+    {
+        if (!_polling)
+        {
+            _polling = true;
+            _ = PollAsync();
+        }
+    }
+
+    private async Task PollAsync()
+    {
+        using var timer = new PeriodicTimer(_pollInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_disposed.Token))
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshAsync();
+                    StateHasChanged();
+                });
+                if (_active is null)
+                {
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page closed.
+        }
+        catch (Exception ex)
+        {
+            _error = $"Lost contact with the run: {ex.Message}";
+            await InvokeAsync(StateHasChanged);
+        }
+        finally
+        {
+            _polling = false;
+        }
+    }
+
+    private async Task StartAsync()
+    {
+        _starting = true;
+        _error = null;
+        try
+        {
+            var state = await Auth.GetAuthenticationStateAsync();
+            var request = new EvalRunRequest
+            {
+                Note = _form.Note,
+                JudgeModel = Blank(_form.JudgeModel),
+                RunJudge = _form.RunJudge,
+                Overrides = new RagRunOverrides
+                {
+                    ModelId = Blank(_form.Model),
+                    ContextWindowTokens = _form.ContextWindow,
+                    AnswerReserveTokens = _form.AnswerReserve,
+                    MaxExcerpts = _form.MaxExcerpts,
+                    InitialTopK = _form.TopK,
+                    HistoryCharBudget = _form.HistoryBudget,
+                    Temperature = _form.Temperature,
+                },
+            };
+
+            var problem = EvalFormRules.Validate(request.Overrides);
+            if (problem is not null)
+            {
+                _error = problem;
+                return;
+            }
+
+            var (success, message, _) = await Evaluations.StartAsync(request, state.User.Identity?.Name ?? "admin");
+            if (success)
+            {
+                _form.Note = string.Empty;
+            }
+            else
+            {
+                _error = message;
+            }
+
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not start the evaluation: {ex.Message}";
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    private void Cancel(Guid runId)
+    {
+        _cancelling = Evaluations.Cancel(runId);
+        if (!_cancelling)
+        {
+            _error = "That run is no longer active.";
+        }
+    }
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    public void Dispose()
+    {
+        _disposed.Cancel();
+        _disposed.Dispose();
+    }
+}

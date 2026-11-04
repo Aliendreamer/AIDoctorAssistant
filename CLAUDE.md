@@ -46,9 +46,16 @@ Layering is acyclic and top-down: Shared ← Data ← AI ← Web. Tests referenc
 
 ### Query flow
 
-`Browser → Blazor → QueryService → RAG plugin` → ICD query expansion → dense embed + BM25 sparse →
-`QdrantVectorStore` (dense + sparse prefetch → RRF fusion) → cross-encoder rerank → Ollama → answer +
-citations. Optional trusted web search (SearXNG) is SSRF-guarded via `WebFetchPolicy`.
+`Browser → Blazor → QueryService → RAG plugin` → query translation plus the books' own terms (`BookTermLookup`) → ICD query expansion → dense embed + BM25 sparse →
+`QdrantVectorStore` (dense + sparse prefetch → RRF fusion) → cross-encoder rerank → named-condition guard
+(`ConditionNameGuard`, refuses when the excerpts never mention the condition) → Ollama → answer + citations. Optional trusted web search (SearXNG) is SSRF-guarded via `WebFetchPolicy`.
+
+### Evaluation flow
+
+Admin starts a run at `/admin/evaluation` → `EvaluationCoordinator` → `EvaluationWorker` → `EvaluationRunner`
+sends `MedAssist.AI/Evaluation/golden-set.json` through `QueryService` inside a `RagRunScope` (per-run model and
+context overrides, plus a trace of what was retrieved) → local LLM judge → results and summary in Postgres,
+compared with a baseline. Run it after any prompt, model, retrieval or context change.
 
 ### Ingestion flow
 

@@ -3,6 +3,7 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using MedAssist.AI.Dictionary;
 using MedAssist.AI.Embedding;
+using MedAssist.AI.Evaluation;
 using MedAssist.AI.Ingestion;
 using MedAssist.AI.Reranker;
 using MedAssist.AI.VectorStore;
@@ -12,9 +13,11 @@ using MedAssist.Data.Repositories;
 using MedAssist.Data.Services;
 using MedAssist.Shared.Interfaces;
 using MedAssist.Shared.Models;
+using MedAssist.Shared.Models.Evaluation;
 using MedAssist.Web.Data;
 using MedAssist.Web.Options;
 using MedAssist.Web.Services;
+using MedAssist.Web.Services.Evaluation;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -167,6 +170,18 @@ internal static class ServiceCollectionExtensions
         services.AddScoped<UserApplicationService>();
         services.AddScoped<AdminBookService>();
         services.AddScoped<AdminUserService>();
+
+        // Evaluation runs on the host, like ingestion, so it survives the admin leaving the page.
+        services.AddSingleton<GoldenSet>(_ => GoldenSetLoader.Embedded);
+        services.AddSingleton<EvaluationCoordinator>();
+        services.AddHostedService<EvaluationWorker>();
+        services.AddTransient<EvaluationRepository>();
+        services.AddTransient<OllamaModelCatalog>();
+        services.AddScoped<EvaluationSnapshotFactory>();
+        services.AddScoped<IEvaluationTarget, QueryServiceEvaluationTarget>();
+        services.AddScoped<IEvalJudgeFactory, OllamaEvalJudgeFactory>();
+        services.AddScoped<EvaluationRunner>();
+        services.AddScoped<AdminEvaluationService>();
 
         services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
         {

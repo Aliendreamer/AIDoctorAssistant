@@ -18,13 +18,15 @@ public static class QueryPreparation
     /// <summary>
     /// Fast-call settings: thinking off (qwen3 ignored <c>/no_think</c> here and emitted ~1,000 tokens),
     /// a small output cap, deterministic output, and the answer calls' <c>num_ctx</c> — a different value
-    /// would make Ollama reload the model between calls.
+    /// would make Ollama reload the model between calls. An active <see cref="RagRunScope"/> replaces the
+    /// model and context window so both calls stay on the same loaded model.
     /// </summary>
-    public static PromptExecutionSettings Settings { get; } = new()
+    public static PromptExecutionSettings Settings => new()
     {
+        ModelId = RagRunScope.Current?.Overrides.ModelId,
         ExtensionData = new Dictionary<string, object>
         {
-            ["num_ctx"] = PromptConstants.ContextWindowTokens,
+            ["num_ctx"] = RagRunScope.ContextWindowTokens,
             ["think"] = false,
             ["num_predict"] = PromptConstants.QueryPrepMaxTokens,
             ["temperature"] = 0.0,
@@ -33,6 +35,20 @@ public static class QueryPreparation
 
     public static bool NeedsPreparation(string query, IReadOnlyList<ChatMessageDto>? history) =>
         !IsCyrillic(query) || PreviousQuestion(query, history) is not null;
+
+    /// <summary>
+    /// Keeps one short query. The model sometimes follows it with a colon and a list of topics, and
+    /// that list drowns the condition when the reranker scores chunks against it.
+    /// </summary>
+    public static string Shorten(string prepared)
+    {
+        var line = prepared.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? string.Empty;
+        var colon = line.IndexOf(':');
+        var query = colon > 0 && line.IndexOf(',', colon) > 0 ? line[..colon] : line;
+        var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(' ', words.Take(PromptConstants.QueryPrepMaxWords));
+    }
 
     public static ChatHistory BuildPrompt(string query, IReadOnlyList<ChatMessageDto>? history)
     {

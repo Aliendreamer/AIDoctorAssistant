@@ -18,6 +18,8 @@ public sealed class MedAssistDbContext : DbContext
     public DbSet<ExtractionStatusEntity> ExtractionStatuses => Set<ExtractionStatusEntity>();
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<ChatMessageEntity> ChatMessages => Set<ChatMessageEntity>();
+    public DbSet<EvaluationRunEntity> EvaluationRuns => Set<EvaluationRunEntity>();
+    public DbSet<EvaluationResultEntity> EvaluationResults => Set<EvaluationResultEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -252,6 +252,136 @@ public sealed class RagIterativeLoopTests
             => Task.FromResult<IReadOnlyList<IllnessEntry>>([]);
     }
 
+    [Fact]
+    public async Task ActiveScope_RecordsTheRankingExcerptsAndOutcome()
+    {
+        var sut = MakePlugin(new StubVectorStore([MakeChunk(1), MakeChunk(2)]), new StubReranker(5.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides());
+        await sut.SearchAsync("треска", "bg");
+
+        Assert.Equal(RagOutcome.Answered, scope.Trace.Outcome);
+        Assert.Equal("треска", scope.Trace.SearchQuery);
+        Assert.Equal(2, scope.Trace.Ranked.Count);
+        Assert.Equal(5.0f, scope.Trace.Ranked[0].Score);
+        Assert.Equal(2, scope.Trace.Excerpts.Count);
+        Assert.True(scope.Trace.PromptTokens > 0);
+    }
+
+    [Fact]
+    public async Task ActiveScope_MaxExcerptsLimitsTheAnswerSources()
+    {
+        var chunks = Enumerable.Range(1, 6).Select(MakeChunk).ToList();
+        var sut = MakePlugin(new StubVectorStore(chunks), new StubReranker(5.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides { MaxExcerpts = 2, InitialTopK = 6 });
+        var result = await sut.SearchAsync("треска", "bg");
+
+        Assert.Equal(2, result.Sources.Count);
+        Assert.Equal(6, scope.Trace.Ranked.Count);
+    }
+
+    [Fact]
+    public async Task ActiveScope_InitialTopKReachesRetrieval()
+    {
+        var chunks = Enumerable.Range(1, 6).Select(MakeChunk).ToList();
+        var sut = MakePlugin(new StubVectorStore(chunks), new StubReranker(5.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides { InitialTopK = 3 });
+        await sut.SearchAsync("треска", "bg");
+
+        Assert.Equal(3, scope.Trace.Ranked.Count);
+    }
+
+    [Fact]
+    public async Task ActiveScope_TinyBudgetDropsExcerptsAndCountsThem()
+    {
+        var chunks = Enumerable.Range(1, 5).Select(MakeChunk).ToList();
+        var sut = MakePlugin(new StubVectorStore(chunks), new StubReranker(5.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides { ContextWindowTokens = 1_000, AnswerReserveTokens = 999 });
+        var result = await sut.SearchAsync("треска", "bg");
+
+        Assert.Single(result.Sources);
+        Assert.Equal(4, scope.Trace.ExcerptsDropped);
+    }
+
+    [Fact]
+    public async Task ActiveScope_LowScoreRecordsWebFallback()
+    {
+        var options = new RagOptions { MinRetryScore = 1.0f, MinAnswerScore = 1.5f };
+        var sut = MakePlugin(new StubVectorStore([MakeChunk(1)]), new StubReranker(-5.0f), options);
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides());
+        var result = await sut.SearchAsync("треска", "bg");
+
+        Assert.True(result.RequiresWebFallback);
+        Assert.Equal(RagOutcome.WebFallback, scope.Trace.Outcome);
+        Assert.Single(scope.Trace.Ranked);
+    }
+
+    [Fact]
+    public async Task ActiveScope_ScoreBelowTheAnswerFloorRecordsIt()
+    {
+        var options = new RagOptions { ConfidenceThreshold = 0f, MaxIterations = 0, MinRetryScore = 0f, MinAnswerScore = 9f };
+        var sut = MakePlugin(new StubVectorStore([MakeChunk(1)]), new StubReranker(5.0f), options);
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides());
+        await sut.SearchAsync("треска", "bg");
+
+        Assert.Equal(RagOutcome.BelowAnswerFloor, scope.Trace.Outcome);
+    }
+
+    [Fact]
+    public async Task NamedConditionMissingFromExcerpts_IsRefusedWithoutCallingTheModel()
+    {
+        var sut = MakePlugin(new StubVectorStore([MakeChunk(1)]), new StubReranker(9.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides());
+        var result = await sut.SearchAsync("Какво е синдром на Зарковски-Хелман?", "bg");
+
+        Assert.Equal(RagOutcome.ConditionNotInExcerpts, scope.Trace.Outcome);
+        Assert.Empty(result.Sources);
+        Assert.Contains("don't contain sufficiently relevant information", result.Answer);
+    }
+
+    [Fact]
+    public async Task NamedCondition_SearchesWithTheSpellingTheBooksUse()
+    {
+        var chunk = new MedicalChunk { BookId = "book1", Language = "bg", ChunkIndex = 1, Text = "Синдром на Goodpasture." };
+        var sut = MakePlugin(new StubVectorStore([chunk]), new StubReranker(9.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides());
+        await sut.SearchAsync("Какво е синдром на Гудпасчър?", "bg");
+
+        Assert.Equal("Какво е синдром на Гудпасчър? goodpasture", scope.Trace.SearchQuery);
+        Assert.Equal(RagOutcome.Answered, scope.Trace.Outcome);
+    }
+
+    [Theory]
+    [InlineData("Гуилън-Барe синдром: определение, причини, симптоми", "Гуилън-Барe синдром")]
+    [InlineData("Лечение на отит\nОбяснение: това е заявка", "Лечение на отит")]
+    [InlineData("едно две три четири пет шест седем осем девет десет единадесет дванадесет 13 14 15 16 17 18",
+        "едно две три четири пет шест седем осем девет десет единадесет дванадесет 13 14 15 16")]
+    [InlineData("Кавасаки болест", "Кавасаки болест")]
+    [InlineData("Заявка: лечение на отит", "Заявка: лечение на отит")]
+    public void Shorten_KeepsOneShortQuery(string prepared, string expected)
+    {
+        Assert.Equal(expected, QueryPreparation.Shorten(prepared));
+    }
+
+    [Fact]
+    public async Task NamedConditionInExcerpts_IsAnswered()
+    {
+        var chunk = new MedicalChunk { BookId = "book1", Language = "bg", ChunkIndex = 1, Text = "Болест на Kawasaki е системен васкулит." };
+        var sut = MakePlugin(new StubVectorStore([chunk]), new StubReranker(9.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides());
+        await sut.SearchAsync("Какво е болест на Кавазаки?", "bg");
+
+        Assert.Equal(RagOutcome.Answered, scope.Trace.Outcome);
+    }
+
     private sealed class TrackingStubEmbedder : IEmbedder
     {
         private readonly List<string> _queried = [];
@@ -328,6 +458,10 @@ public sealed class RagIterativeLoopTests
 
         public Task<SparseVector> VectorizePassageAsync(string text, CancellationToken ct = default)
             => Task.FromResult(SparseVector.Empty);
+
+        public Task<IReadOnlyDictionary<string, float>> GetWordWeightsAsync(CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyDictionary<string, float>>(
+                new Dictionary<string, float> { ["goodpasture"] = 5f, ["fever"] = 2f, ["бронхиолит"] = 5f });
     }
 
     private sealed class StubReranker : ICrossEncoderReranker
