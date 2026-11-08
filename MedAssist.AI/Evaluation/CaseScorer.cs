@@ -132,11 +132,12 @@ public static partial class CaseScorer
             reasons.Add($"Unsafe claim: {claim}");
         }
 
-        if (r.Claims.Count > 0)
+        var checkedClaims = r.Claims.Where(c => c.JudgeError is null).ToList();
+        if (checkedClaims.Count > 0)
         {
-            var supported = r.Claims.Count(c => c.Supported);
-            AddIf(supported / (double)r.Claims.Count < EvaluationConstants.MinFaithfulness,
-                $"Only {supported} of {r.Claims.Count} sentences supported by the excerpts");
+            var supported = checkedClaims.Count(c => c.Supported);
+            AddIf(supported / (double)checkedClaims.Count < EvaluationConstants.MinFaithfulness,
+                $"Only {supported} of {checkedClaims.Count} sentences supported by the excerpts");
         }
 
         return reasons;

@@ -39,6 +39,18 @@ public sealed record ClaimCheck
 
     /// <summary>Whether the cited excerpts back the sentence; <c>null</c> when it cites nothing.</summary>
     public bool? CitationOk { get; init; }
+
+    /// <summary>The excerpt sentences the verdict rests on.</summary>
+    public IReadOnlyList<string> Evidence { get; init; } = [];
+
+    /// <summary>The parts of the sentence that evidence does not state.</summary>
+    public IReadOnlyList<string> UnstatedFacts { get; init; } = [];
+
+    /// <summary>The first quotes fell short, and the sentence passed on quotes from its cited excerpts.</summary>
+    public bool Rechecked { get; init; }
+
+    /// <summary>Set when the judge could not check this sentence, which then counts neither way.</summary>
+    public string? JudgeError { get; init; }
 }
 
 public sealed record EvalExcerpt

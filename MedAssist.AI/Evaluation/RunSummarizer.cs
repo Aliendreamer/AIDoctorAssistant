@@ -12,7 +12,8 @@ public static class RunSummarizer
         var answered = answerable.Where(r => r.Outcome == RagOutcome.Answered && r.Error is null).ToList();
         var judged = answerable.Where(r => r.Judged).ToList();
         var facts = judged.SelectMany(r => r.Facts).ToList();
-        var claims = judged.SelectMany(r => r.Claims).ToList();
+        var allClaims = judged.SelectMany(r => r.Claims).ToList();
+        var claims = allClaims.Where(c => c.JudgeError is null).ToList();
         var citedClaims = claims.Where(c => c.CitationOk is not null).ToList();
         var retrieval = answerable.Where(r => r.Retrieval is not null).Select(r => r.Retrieval!).ToList();
         var latencies = results.Where(r => r.Error is null).Select(r => r.LatencySeconds).Order().ToList();
@@ -30,6 +31,7 @@ public static class RunSummarizer
             Inconclusive = results.Count - decided.Count,
             Errors = results.Count(r => r.Error is not null),
             JudgeFailures = results.Count(r => r.JudgeError is not null),
+            UnjudgedClaims = allClaims.Count - claims.Count,
             PassRate = Rate(decided, r => r.Passed),
 
             FactRecall = hasFacts ? Rate(facts, f => f.InAnswer == true) : null,

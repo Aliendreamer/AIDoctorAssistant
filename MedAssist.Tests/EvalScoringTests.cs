@@ -212,6 +212,42 @@ public sealed class EvalScoringTests
     }
 
     [Fact]
+    public void Decide_UnjudgedSentencesCountNeitherWay()
+    {
+        var result = Good() with
+        {
+            Claims =
+            [
+                new ClaimCheck { Supported = true },
+                new ClaimCheck { JudgeError = "broken" },
+                new ClaimCheck { JudgeError = "broken" },
+            ],
+        };
+
+        Assert.True(CaseScorer.Decide(result).Passed);
+    }
+
+    [Fact]
+    public void Summarize_LeavesUnjudgedSentencesOutOfTheRatesAndCountsThem()
+    {
+        var result = Good() with
+        {
+            Judged = true,
+            Claims =
+            [
+                new ClaimCheck { Supported = true, CitationOk = true },
+                new ClaimCheck { JudgeError = "broken" },
+            ],
+        };
+
+        var summary = RunSummarizer.Summarize([result], 8_192);
+
+        Assert.Equal(1.0, summary.Faithfulness);
+        Assert.Equal(1.0, summary.CitationAccuracy);
+        Assert.Equal(1, summary.UnjudgedClaims);
+    }
+
+    [Fact]
     public void Decide_LowFaithfulnessFails()
     {
         var claims = new[]

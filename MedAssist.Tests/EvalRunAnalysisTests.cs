@@ -245,6 +245,15 @@ public sealed class EvalRunAnalysisTests
     }
 
     [Fact]
+    public void Compare_FlagsAChangedJudgeMethod()
+    {
+        var comparison = RunComparer.Compare(
+            Summary(), Snapshot() with { JudgeMethod = "older" }, [], Summary(), Snapshot(), []);
+
+        Assert.True(comparison.JudgeChanged);
+    }
+
+    [Fact]
     public void Compare_UndecidedQuestionsAreNotFlips()
     {
         var before = new[] { Answer("G1") };

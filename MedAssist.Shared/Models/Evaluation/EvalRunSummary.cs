@@ -11,6 +11,9 @@ public sealed record EvalRunSummary
 
     public int Errors { get; init; }
     public int JudgeFailures { get; init; }
+
+    /// <summary>Answer sentences left out of the judged rates because their check failed.</summary>
+    public int UnjudgedClaims { get; init; }
     public double PassRate { get; init; }
 
     public double? FactRecall { get; init; }

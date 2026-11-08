@@ -80,7 +80,8 @@ public static class RunComparer
             Cases = DiffCases(baselineCases, currentCases),
             GoldenSetChanged = baselineSnapshot.GoldenSetHash != currentSnapshot.GoldenSetHash,
             JudgeChanged = baselineSnapshot.RunJudge && currentSnapshot.RunJudge
-                && baselineSnapshot.JudgeModel != currentSnapshot.JudgeModel,
+                && (baselineSnapshot.JudgeModel != currentSnapshot.JudgeModel
+                    || baselineSnapshot.JudgeMethod != currentSnapshot.JudgeMethod),
         };
     }
 

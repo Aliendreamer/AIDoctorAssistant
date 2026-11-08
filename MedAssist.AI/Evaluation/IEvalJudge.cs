@@ -9,7 +9,7 @@ public interface IEvalJudge
     Task<IReadOnlyList<bool>> CheckStatementsAsync(
         string text, IReadOnlyList<string> statements, CancellationToken cancellationToken);
 
-    /// <summary>For each claim, whether the excerpts support it and whether its citations do.</summary>
+    /// <summary>For each claim, whether the excerpts support it, whether its citations do, and the evidence used.</summary>
     Task<IReadOnlyList<ClaimCheck>> CheckClaimsAsync(
         IReadOnlyList<EvalExcerpt> excerpts, IReadOnlyList<AnswerClaim> claims, CancellationToken cancellationToken);
 }

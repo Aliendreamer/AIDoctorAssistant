@@ -29,6 +29,7 @@ public sealed class EvaluationSnapshotFactory(
         {
             Model = overrides.ModelId ?? DefaultModel,
             JudgeModel = request.RunJudge ? request.JudgeModel ?? DefaultModel : null,
+            JudgeMethod = request.RunJudge ? EvaluationConstants.JudgeMethod : string.Empty,
             ContextWindowTokens = overrides.ContextWindowTokens ?? PromptConstants.ContextWindowTokens,
             AnswerReserveTokens = overrides.AnswerReserveTokens ?? PromptConstants.AnswerReserveTokens,
             MaxExcerpts = overrides.MaxExcerpts ?? PromptConstants.MaxExcerpts,

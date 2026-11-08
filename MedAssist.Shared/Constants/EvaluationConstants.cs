@@ -20,9 +20,27 @@ public static class EvaluationConstants
     /// <summary>Extra judge context on top of the run's window: the judge also reads the answer.</summary>
     public const int JudgeContextHeadroomTokens = 4_096;
 
-    public const int JudgeMaxOutputTokens = 1_024;
+    /// <summary>Five copied Bulgarian sentences are the longest reply a judge call has to fit.</summary>
+    public const int JudgeMaxOutputTokens = 1_200;
 
-    /// <summary>Answer sentences checked for grounding, which bounds the judge's output.</summary>
+    /// <summary>Recorded on each run, so runs graded differently are not compared as if alike. Change it with the judge.</summary>
+    public const string JudgeMethod = "quote-check-recheck-v4";
+
+    /// <summary>Sentences the judge may copy as evidence for one answer sentence.</summary>
+    public const int MaxJudgeQuotes = 5;
+
+    /// <summary>One word cannot place a quote; two allow short list items.</summary>
+    public const int MinQuoteWords = 2;
+
+    /// <summary>Share of a quote's words an excerpt must hold, which leaves room for OCR misreadings.</summary>
+    public const double MinQuoteWordShare = 0.8;
+
+    /// <summary>Sentences added to the evidence because they hold numbers the quotes missed.</summary>
+    public const int MaxAddedEvidenceSentences = 2;
+
+    public const int MinEvidenceSentenceChars = 15;
+
+    /// <summary>Answer sentences checked for grounding; the judge makes up to four calls for each.</summary>
     public const int MaxJudgedClaims = 15;
 
     /// <summary>Shorter fragments are connective text rather than claims.</summary>

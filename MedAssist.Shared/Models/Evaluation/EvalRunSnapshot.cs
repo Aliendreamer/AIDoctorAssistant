@@ -17,6 +17,10 @@ public sealed record EvalRunSnapshot
 {
     public string Model { get; init; } = string.Empty;
     public string? JudgeModel { get; init; }
+
+    /// <summary>How answers were graded; empty on runs from before this was recorded.</summary>
+    public string JudgeMethod { get; init; } = string.Empty;
+
     public int ContextWindowTokens { get; init; }
     public int AnswerReserveTokens { get; init; }
     public int MaxExcerpts { get; init; }
@@ -51,6 +55,7 @@ public sealed record EvalRunSnapshot
     [
         ("Answer model", Model),
         ("Judge model", RunJudge ? JudgeModel ?? Model : "off"),
+        ("Judge method", RunJudge ? JudgeMethod : "off"),
         ("Context window", ContextWindowTokens.ToString()),
         ("Answer reserve", AnswerReserveTokens.ToString()),
         ("Max excerpts", MaxExcerpts.ToString()),
