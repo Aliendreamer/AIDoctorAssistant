@@ -57,10 +57,6 @@ public sealed record EvalExcerpt
 {
     public int Number { get; init; }
     public string Source { get; init; } = string.Empty;
-
-    /// <summary>The section heading the answer model saw; often the only place the disease is named.</summary>
-    public string Section { get; init; } = string.Empty;
-
     public bool Relevant { get; init; }
     public string Text { get; init; } = string.Empty;
 }

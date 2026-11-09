@@ -24,7 +24,7 @@ public static class EvaluationConstants
     public const int JudgeMaxOutputTokens = 1_200;
 
     /// <summary>Recorded on each run, so runs graded differently are not compared as if alike. Change it with the judge.</summary>
-    public const string JudgeMethod = "quote-check-recheck-v5";
+    public const string JudgeMethod = "quote-check-recheck-v4";
 
     /// <summary>Sentences the judge may copy as evidence for one answer sentence.</summary>
     public const int MaxJudgeQuotes = 5;

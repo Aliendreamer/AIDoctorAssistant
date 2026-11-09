@@ -167,3 +167,9 @@ Faithfulness 77%, citation accuracy 76%, passed 24 of 34, 4 sentences unjudged, 
   Kawasaki heading without naming the disease, and the judge flags the name as unstated. Rephrased answers make
   such borderline verdicts swing, so single flips are weak evidence.
 - The longer prompt dropped 3 more excerpts for budget (9 to 12); G10 lost one.
+- Judge v5 (section heading above each quote in the check step) was tried and undone. Run `4b65f061` graded
+  the same answers as `1c7a13ab`: 21 sentences newly rejected, 8 newly passed, faithfulness 78% to 71%.
+  OCR section headings are often wrong (bronchiolitis under an otitis antibiotics list, gastroenteritis under
+  "Спешна психиатрия"), and the check rule "same disease" then rejects true sentences. Do not show headings
+  to the judge. Any change to the check prompt also moves how it splits facts, so it reshuffles borderline
+  verdicts. `4b65f061` and the cancelled run are v5 and are not comparable with v4 runs.
