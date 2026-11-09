@@ -145,3 +145,16 @@ Faithfulness 77%, citation accuracy 76%, passed 24 of 34, 4 sentences unjudged, 
 - The user confirmed the physician has reviewed the golden set and it is fine; no re-run is needed for that.
   The evaluation harness is finished, and `d568495f` is the baseline. Do not raise the review as pending again.
 - G8 now fails on 4 of its 7 sentences, so that verdict rests on partial judging.
+
+### Context engineering
+
+- Moving `qwen3:8b` fully onto the GPU changed 16 answers whose excerpts were identical. Each setup repeats
+  itself exactly, but answers made on one setup cannot be compared word for word with the other.
+- Run `d1b8b73e` drops reference lists and book indexes from the excerpts (`ReferenceMatter`). Only G6, G9, E2
+  and E3 got different excerpts, and none lost a relevant one. Passed 23 of 34, faithfulness 77%, excerpt
+  precision 82%, about 38 minutes. Pinned as baseline on 2026-11-09.
+- The differential-diagnosis few-shot example was the same Kawasaki case as G5 and E5, and the model copied it
+  (E5: 8 of 10 sentences unsupported). Run `1c7a13ab` uses an adult pulmonary embolism example instead. The
+  other 31 answers were identical to `d1b8b73e`, so the GPU setup is repeatable. E5 went to 6 of 10 supported
+  with 3 of 3 facts. G5 stayed at 3 of 6, and G10 lost one fact. Faithfulness 78%, passed 23 of 34.
+- Keep few-shot examples off topics the golden set or the books cover, or the model answers from the example.

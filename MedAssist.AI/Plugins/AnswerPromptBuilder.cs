@@ -35,6 +35,15 @@ public static partial class AnswerPromptBuilder
     private const string InsufficientRule =
         "If the excerpts are insufficient, say so in one sentence in the question's language and stop.";
 
+    /// <summary>
+    /// For excerpts that answer only part of the question: without it the model fills the gap (often treatment
+    /// or prognosis) from its own knowledge, which the physician cannot tell apart from the books.
+    /// </summary>
+    public const string GroundingInstruction =
+        "Use only facts stated in the excerpts above, not your own medical knowledge. If part of the question is " +
+        "not covered by the excerpts, say in one sentence that the indexed books do not cover that part, instead " +
+        "of filling it in.";
+
     public const string CitationInstruction =
         "After each factual clinical claim, append the number(s) of the excerpt(s) above that support it in " +
         "square brackets, e.g. [1] or [2][4]. Cite only excerpts that genuinely support the claim, do not mark " +
@@ -111,6 +120,7 @@ public static partial class AnswerPromptBuilder
         }
         // Language and citation lines go last: Ollama drops the START of an over-long prompt.
         user.AppendLine(LanguageInstruction(query))
+            .AppendLine(GroundingInstruction)
             .AppendLine(CitationInstruction)
             .AppendLine()
             .Append(NoThink);

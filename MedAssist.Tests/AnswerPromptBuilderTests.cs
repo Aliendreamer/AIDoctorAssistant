@@ -55,6 +55,19 @@ public sealed class AnswerPromptBuilderTests
 
     [Theory]
     [MemberData(nameof(Profiles))]
+    public void GroundingInstruction_AppearsOnce_AfterExcerpts_BeforeCitationInstruction(string profile)
+    {
+        var history = AnswerPromptBuilder.BuildBookAnswer(Profile(profile), "What is Graves' disease?", _chunks, null);
+
+        Assert.Equal(1, Count(AllText(history), AnswerPromptBuilder.GroundingInstruction));
+        var last = history[^1].Content!;
+        var grounding = last.IndexOf(AnswerPromptBuilder.GroundingInstruction, StringComparison.Ordinal);
+        Assert.True(grounding > last.IndexOf("TSI text.", StringComparison.Ordinal));
+        Assert.True(grounding < last.IndexOf(AnswerPromptBuilder.CitationInstruction, StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [MemberData(nameof(Profiles))]
     public void PersonaAndProseRule_AppearOnce(string profile)
     {
         var text = AllText(AnswerPromptBuilder.BuildBookAnswer(Profile(profile), "q", _chunks, null));
