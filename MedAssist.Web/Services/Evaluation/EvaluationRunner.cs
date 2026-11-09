@@ -137,6 +137,7 @@ public sealed class EvaluationRunner(
             {
                 Number = i + 1,
                 Source = Describe(c),
+                Section = c.SectionTitle,
                 Relevant = excerptFlags[i],
                 Text = c.Text,
             }).ToList(),

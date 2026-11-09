@@ -66,6 +66,17 @@ public sealed class AnswerPromptBuilderTests
         Assert.True(grounding < last.IndexOf(AnswerPromptBuilder.CitationInstruction, StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void OmitGroundingInstructionOverride_LeavesItOut()
+    {
+        using var scope = RagRunScope.Begin(new RagRunOverrides { OmitGroundingInstruction = true });
+
+        var text = AllText(AnswerPromptBuilder.BuildBookAnswer(PromptProfiles.Default, "What is Graves?", _chunks, null));
+
+        Assert.DoesNotContain(AnswerPromptBuilder.GroundingInstruction, text);
+        Assert.Contains(AnswerPromptBuilder.CitationInstruction, text);
+    }
+
     [Theory]
     [MemberData(nameof(Profiles))]
     public void PersonaAndProseRule_AppearOnce(string profile)

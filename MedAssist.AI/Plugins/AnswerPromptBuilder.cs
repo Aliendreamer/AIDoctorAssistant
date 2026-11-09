@@ -119,9 +119,13 @@ public static partial class AnswerPromptBuilder
                 .AppendLine();
         }
         // Language and citation lines go last: Ollama drops the START of an over-long prompt.
-        user.AppendLine(LanguageInstruction(query))
-            .AppendLine(GroundingInstruction)
-            .AppendLine(CitationInstruction)
+        user.AppendLine(LanguageInstruction(query));
+        if (RagRunScope.Current?.Overrides.OmitGroundingInstruction != true)
+        {
+            user.AppendLine(GroundingInstruction);
+        }
+
+        user.AppendLine(CitationInstruction)
             .AppendLine()
             .Append(NoThink);
 

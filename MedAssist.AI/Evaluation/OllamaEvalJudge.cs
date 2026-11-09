@@ -150,7 +150,7 @@ public sealed partial class OllamaEvalJudge(IChatCompletionService chat, string?
             return rejected;
         }
 
-        var facts = await AskAsync(_checkSystem, CheckPrompt(evidence, claim.Text), ParseFacts, cancellationToken);
+        var facts = await AskAsync(_checkSystem, CheckPrompt(evidence, cited, claim.Text), ParseFacts, cancellationToken);
         return facts.All(f => f.Stated)
             ? rejected with { Supported = true, CitationOk = true, Rechecked = true, Evidence = evidence, UnstatedFacts = [] }
             : rejected;
@@ -175,7 +175,7 @@ public sealed partial class OllamaEvalJudge(IChatCompletionService chat, string?
         var supported = false;
         if (evidence.Count > 0 && missingNumbers.Count == 0)
         {
-            var facts = await AskAsync(_checkSystem, CheckPrompt(evidence, claim.Text), ParseFacts, cancellationToken);
+            var facts = await AskAsync(_checkSystem, CheckPrompt(evidence, excerpts, claim.Text), ParseFacts, cancellationToken);
             unstated = facts.Where(f => !f.Stated).Select(f => f.Fact).ToList();
             supported = unstated.Count == 0;
         }
@@ -208,11 +208,13 @@ public sealed partial class OllamaEvalJudge(IChatCompletionService chat, string?
             .Append("""Reply as {"quotes":["first sentence","second sentence"]}. Reply {"quotes":[]} only if no excerpt is about this subject.""")
             .ToString();
 
-    private static string CheckPrompt(IReadOnlyList<string> evidence, string claim) =>
+    private static string CheckPrompt(IReadOnlyList<string> evidence, IReadOnlyList<EvalExcerpt> excerpts, string claim) =>
         new StringBuilder()
-            .AppendLine("<evidence>").AppendLine(string.Join('\n', evidence)).AppendLine("</evidence>").AppendLine()
+            .AppendLine("<evidence>").Append(EvidenceBlock(evidence, excerpts)).AppendLine("</evidence>").AppendLine()
             .AppendLine($"Statement: {claim}")
             .AppendLine()
+            .AppendLine("A \"Section:\" line gives the book heading the evidence below it comes from, so a disease " +
+                        "named only in that heading is what the evidence is about.")
             .AppendLine("Split the statement into its separate facts, leaving out filler such as \"it is important to " +
                         "note\". For each fact, \"stated\" is \"yes\" if the evidence says it, in any wording or " +
                         "language, about the same disease, drug and situation. It is \"no\" if the evidence does not " +
@@ -220,6 +222,31 @@ public sealed partial class OllamaEvalJudge(IChatCompletionService chat, string?
                         "or a stronger claim.")
             .Append("""Reply as {"facts":[{"fact":"the first fact","stated":"yes or no"},{"fact":"the second fact","stated":"yes or no"}]}.""")
             .ToString();
+
+    /// <summary>
+    /// The evidence under the headings of the excerpts it came from. Excerpts often never name their disease
+    /// ("Systemic vasculitis, presenting as...") because the heading does, and without it the judge rejected
+    /// sentences that copied them.
+    /// </summary>
+    private static string EvidenceBlock(IReadOnlyList<string> evidence, IReadOnlyList<EvalExcerpt> excerpts)
+    {
+        var block = new StringBuilder();
+        string? current = null;
+        foreach (var item in evidence)
+        {
+            var number = ClaimEvidence.FindExcerpts(item, excerpts).FirstOrDefault();
+            var section = excerpts.FirstOrDefault(e => e.Number == number)?.Section.Trim() ?? string.Empty;
+            if (section.Length > 0 && section != current)
+            {
+                block.AppendLine($"Section: {section}");
+            }
+
+            current = section.Length > 0 ? section : current;
+            block.AppendLine(item);
+        }
+
+        return block.ToString();
+    }
 
     /// <summary>Reads one row per statement, in statement order; throws when any row is missing.</summary>
     internal static IReadOnlyList<JsonElement> ParseRows(string reply, int expected)

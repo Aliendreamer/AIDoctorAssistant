@@ -265,6 +265,22 @@ public sealed class EvalJudgeTests
         Assert.DoesNotContain("Дозировката", chat.Prompts[2]);
     }
 
+    [Fact]
+    public async Task CheckClaims_EvidenceCarriesTheHeadingOfItsExcerpt()
+    {
+        var chat = new ScriptedChat(_quoteOne, _allStated);
+        var sut = new OllamaEvalJudge(chat, null, 8_192);
+        EvalExcerpt[] excerpts = [_claimExcerpts[0] with { Section = "Отравяне с парацетамол" }, _claimExcerpts[1]];
+
+        await sut.CheckClaimsAsync(excerpts, [new AnswerClaim("Paracetamol is absorbed quickly", [1])], CancellationToken.None);
+
+        var check = chat.Prompts[1];
+        Assert.StartsWith("<evidence>", check);
+        Assert.Contains("Section: Отравяне с парацетамол", check);
+        Assert.True(check.IndexOf("Section: Отравяне с парацетамол", StringComparison.Ordinal)
+                    < check.IndexOf(_claimExcerpts[0].Text, StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("""{"other":true}""")]
     [InlineData("""{"quotes":"not a list"}""")]

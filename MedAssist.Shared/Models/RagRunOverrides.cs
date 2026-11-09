@@ -36,4 +36,10 @@ public sealed record RagRunOverrides
     /// measuring the filter against a baseline made on the same setup.
     /// </summary>
     public bool KeepReferenceMatter { get; init; }
+
+    /// <summary>
+    /// Leaves the grounding instruction out of the answer prompt, as before it was added. For measuring it
+    /// against a baseline graded by the same judge.
+    /// </summary>
+    public bool OmitGroundingInstruction { get; init; }
 }

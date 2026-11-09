@@ -106,6 +106,13 @@ else
             </label>
         </div>
 
+        <div class="form-check mb-2">
+            <input id="eval-omit-grounding" type="checkbox" class="form-check-input" @bind="_form.OmitGroundingInstruction" />
+            <label class="form-check-label" for="eval-omit-grounding">
+                Leave out the instruction to use only the excerpts (production includes it)
+            </label>
+        </div>
+
         <div class="form-check mb-3">
             <input id="eval-run-judge" type="checkbox" class="form-check-input" @bind="_form.RunJudge" />
             <label class="form-check-label" for="eval-run-judge">
@@ -202,6 +209,7 @@ else
         public double? Temperature { get; set; } = EvaluationConstants.DefaultTemperature;
         public bool RunJudge { get; set; } = true;
         public bool KeepReferenceMatter { get; set; }
+        public bool OmitGroundingInstruction { get; set; }
     }
 
     private readonly RunForm _form = new();
@@ -310,6 +318,7 @@ else
                     HistoryCharBudget = _form.HistoryBudget,
                     Temperature = _form.Temperature,
                     KeepReferenceMatter = _form.KeepReferenceMatter,
+                    OmitGroundingInstruction = _form.OmitGroundingInstruction,
                 },
             };
 

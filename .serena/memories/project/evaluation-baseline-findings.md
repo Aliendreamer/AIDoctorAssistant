@@ -158,3 +158,12 @@ Faithfulness 77%, citation accuracy 76%, passed 24 of 34, 4 sentences unjudged, 
   other 31 answers were identical to `d1b8b73e`, so the GPU setup is repeatable. E5 went to 6 of 10 supported
   with 3 of 3 facts. G5 stayed at 3 of 6, and G10 lost one fact. Faithfulness 78%, passed 23 of 34.
 - Keep few-shot examples off topics the golden set or the books cover, or the model answers from the example.
+- `1c7a13ab` pinned as baseline. Run `e1257795` adds a grounding instruction after the excerpts ("use only facts
+  in the excerpts; say in one sentence what the books do not cover"). Passed 24 of 34 (+1), faithfulness 77.5%
+  (-0.5 pts). Now pass: R3, R6, G5, G12. Now fail: G1, G2, E1.
+- The model wrote a "books do not cover" sentence only 3 times (R3, R5, N10). E1, E5 and E6 still add treatment
+  and prognosis from its own knowledge, so `qwen3:8b` follows the instruction only partly.
+- G1's first sentence was rejected though it copies the excerpt: the excerpt says "Системен васкулит..." under a
+  Kawasaki heading without naming the disease, and the judge flags the name as unstated. Rephrased answers make
+  such borderline verdicts swing, so single flips are weak evidence.
+- The longer prompt dropped 3 more excerpts for budget (9 to 12); G10 lost one.
