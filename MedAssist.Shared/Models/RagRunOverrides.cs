@@ -30,4 +30,10 @@ public sealed record RagRunOverrides
 
     /// <summary>Skips every web search, so results depend only on the books and the pipeline.</summary>
     public bool BookOnly { get; init; }
+
+    /// <summary>
+    /// Lets reference lists and book indexes reach the excerpts, as before they were filtered out. For
+    /// measuring the filter against a baseline made on the same setup.
+    /// </summary>
+    public bool KeepReferenceMatter { get; init; }
 }

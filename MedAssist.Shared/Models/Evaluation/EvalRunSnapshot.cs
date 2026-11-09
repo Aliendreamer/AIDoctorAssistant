@@ -63,6 +63,7 @@ public sealed record EvalRunSnapshot
         ("History budget (chars)", HistoryCharBudget.ToString()),
         ("Temperature", Temperature?.ToString("0.##") ?? "model default"),
         ("Web search", BookOnly ? "off" : "on"),
+        ("Reference lists and indexes", Overrides.KeepReferenceMatter ? "kept" : "dropped"),
         ("Confidence threshold", ConfidenceThreshold.ToString("0.##")),
         ("Min answer score", MinAnswerScore.ToString("0.##")),
         ("Min retry score", MinRetryScore.ToString("0.##")),

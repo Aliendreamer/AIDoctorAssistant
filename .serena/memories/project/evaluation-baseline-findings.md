@@ -138,5 +138,10 @@ Faithfulness 77%, citation accuracy 76%, passed 24 of 34, 4 sentences unjudged, 
   passed 24 of 34, faithfulness 76%, citation accuracy 76%, 0 unjudged. G8 now fails on all 7 sentences (4 of 7).
   9 verdicts moved (5 up, 4 down), only in questions whose excerpts changed. R3.1 is now rejected.
 - Runs take 80 to 98 minutes because `qwen3:8b` sits 17% on CPU: PCC sets `OLLAMA_NUM_PARALLEL=2` (KV cache
-  reserved twice) and the D&D app keeps `mxbai-embed-large` loaded. Proposed: `OLLAMA_NUM_PARALLEL=1`.
+  reserved twice) and the D&D app keeps `mxbai-embed-large` loaded.
+- 2026-11-09: `d568495f` (v4) pinned as baseline. PCC now sets `OLLAMA_NUM_PARALLEL=1` (PCC repo, uncommitted
+  there): `qwen3:8b` at 12,288 context is 5.9 GB and 100% GPU, about 47 tokens/s. The first call after an Ollama
+  restart took about 3 minutes to load.
+- The user confirmed the physician has reviewed the golden set and it is fine; no re-run is needed for that.
+  The evaluation harness is finished, and `d568495f` is the baseline. Do not raise the review as pending again.
 - G8 now fails on 4 of its 7 sentences, so that verdict rests on partial judging.

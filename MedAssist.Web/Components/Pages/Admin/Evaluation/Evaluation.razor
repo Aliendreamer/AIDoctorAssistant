@@ -99,6 +99,13 @@ else
         </div>
         <p class="eval-hint">Empty fields use the production value. Web search is always off during a run.</p>
 
+        <div class="form-check mb-2">
+            <input id="eval-keep-refs" type="checkbox" class="form-check-input" @bind="_form.KeepReferenceMatter" />
+            <label class="form-check-label" for="eval-keep-refs">
+                Keep reference lists and book indexes in the excerpts (production drops them)
+            </label>
+        </div>
+
         <div class="form-check mb-3">
             <input id="eval-run-judge" type="checkbox" class="form-check-input" @bind="_form.RunJudge" />
             <label class="form-check-label" for="eval-run-judge">
@@ -194,6 +201,7 @@ else
         public int? HistoryBudget { get; set; }
         public double? Temperature { get; set; } = EvaluationConstants.DefaultTemperature;
         public bool RunJudge { get; set; } = true;
+        public bool KeepReferenceMatter { get; set; }
     }
 
     private readonly RunForm _form = new();
@@ -301,6 +309,7 @@ else
                     InitialTopK = _form.TopK,
                     HistoryCharBudget = _form.HistoryBudget,
                     Temperature = _form.Temperature,
+                    KeepReferenceMatter = _form.KeepReferenceMatter,
                 },
             };
 

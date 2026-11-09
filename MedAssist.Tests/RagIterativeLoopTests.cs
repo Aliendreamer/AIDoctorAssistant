@@ -269,6 +269,45 @@ public sealed class RagIterativeLoopTests
     }
 
     [Fact]
+    public async Task ReferenceListChunks_NeverReachTheModel()
+    {
+        var references = new MedicalChunk
+        {
+            BookId = "book2",
+            BookTitle = "Book 2",
+            ChunkIndex = 2,
+            Text = "- 1. Nelson Textbook of Pediatrics, 19th ed, Philadelphia, Saunders, 2011.\n" +
+                   "- 2. Smith J. et al. Pediatric emergencies. J. Pediatr. 2015, 166, 10-15.",
+        };
+        var sut = MakePlugin(new StubVectorStore([MakeChunk(1), references]), new StubReranker(5.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides());
+        var result = await sut.SearchAsync("треска", "bg");
+
+        Assert.Equal("Book 1", Assert.Single(result.Sources).BookTitle);
+        Assert.DoesNotContain(scope.Trace.Ranked, c => c.BookTitle == "Book 2");
+    }
+
+    [Fact]
+    public async Task KeepReferenceMatterOverride_LetsReferenceListsThrough()
+    {
+        var references = new MedicalChunk
+        {
+            BookId = "book2",
+            BookTitle = "Book 2",
+            ChunkIndex = 2,
+            Text = "- 1. Nelson Textbook of Pediatrics, 19th ed, Philadelphia, Saunders, 2011.\n" +
+                   "- 2. Smith J. et al. Pediatric emergencies. J. Pediatr. 2015, 166, 10-15.",
+        };
+        var sut = MakePlugin(new StubVectorStore([MakeChunk(1), references]), new StubReranker(5.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides { KeepReferenceMatter = true });
+        await sut.SearchAsync("треска", "bg");
+
+        Assert.Contains(scope.Trace.Ranked, c => c.BookTitle == "Book 2");
+    }
+
+    [Fact]
     public async Task ActiveScope_MaxExcerptsLimitsTheAnswerSources()
     {
         var chunks = Enumerable.Range(1, 6).Select(MakeChunk).ToList();

@@ -13,7 +13,7 @@ internal sealed class CandidateRetriever(
     ISparseVectorizer sparseVectorizer,
     IVectorStore vectorStore)
 {
-    /// <summary>Dense + sparse search for each term, concatenating the hits.</summary>
+    /// <summary>Dense + sparse search for each term, concatenating the hits. Reference lists and indexes are left out.</summary>
     public async Task<List<MedicalChunk>> GatherAsync(
         IReadOnlyList<string> terms,
         LanguageFilter langFilter,
@@ -27,7 +27,7 @@ internal sealed class CandidateRetriever(
             var denseVector = await embedder.EmbedQueryAsync(term, cancellationToken);
             var sparseVector = await sparseVectorizer.VectorizeQueryAsync(term, cancellationToken);
             var results = await vectorStore.SearchAsync(denseVector, sparseVector, langFilter, bookIds, topK, cancellationToken);
-            chunks.AddRange(results);
+            chunks.AddRange(results.Where(Admit));
         }
 
         return chunks;
@@ -87,11 +87,15 @@ internal sealed class CandidateRetriever(
         foreach (var (chapter, section, bookId) in sections)
         {
             var sectionChunks = await vectorStore.ScrollSectionAsync(chapter, section, bookId, limit: 50, cancellationToken);
-            expanded.AddRange(sectionChunks);
+            expanded.AddRange(sectionChunks.Where(Admit));
         }
 
         return expanded
             .DistinctBy(c => (c.BookId, c.ChunkIndex))
             .ToList();
     }
+
+    /// <summary>Keeps reference lists and indexes out, unless the evaluation run asked to keep them.</summary>
+    private static bool Admit(MedicalChunk chunk) =>
+        RagRunScope.Current?.Overrides.KeepReferenceMatter == true || !ReferenceMatter.IsReferenceMatter(chunk.Text);
 }
