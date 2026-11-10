@@ -173,3 +173,12 @@ Faithfulness 77%, citation accuracy 76%, passed 24 of 34, 4 sentences unjudged, 
   "Спешна психиатрия"), and the check rule "same disease" then rejects true sentences. Do not show headings
   to the judge. Any change to the check prompt also moves how it splits facts, so it reshuffles borderline
   verdicts. `4b65f061` and the cancelled run are v5 and are not comparable with v4 runs.
+- `e1257795` pinned as baseline after the judge was restored to v4 (`2ed45e8`).
+- Run `9c9c2df9` (`f2bcf70`): the Graves sample answer was replaced with a plain gout one (no explanatory clauses,
+  no claims about the sources, ends with "the excerpts do not say..."), and sentences saying the books do not
+  cover something are no longer scored. Passed 24 to 29, faithfulness 78.2% to 83.1% (baseline recounted
+  without its 2 not-covered sentences), citation accuracy 77% to 82%, fact recall 84% to 81%.
+- Now pass: G1, G2, E1, E3, E6, R2. Now fails: R3, which answers in 2 sentences and says the rest is not
+  covered (honest, but 1 of 2 supported). Lost facts: G2 corticosteroids, G8 urgency, E3 deferring antibiotics,
+  R5 definition. The model now writes 6 not-covered sentences. Pinned as baseline on 2026-11-10.
+- The sample answer drives style far more than instructions do for `qwen3:8b`.
