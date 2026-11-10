@@ -20,6 +20,14 @@ public static partial class CaseScorer
     [GeneratedRegex(@"([.!?])\s*((?:\[\s*\d+(?:\s*,\s*\d+)*\s*\]\s*)+)")]
     private static partial Regex TrailingMarkerRegex();
 
+    // "The indexed books do not cover X": the answer prompt asks for this sentence when the excerpts leave a
+    // gap. It states no clinical fact, so the judge can only reject it, and it must not count against the answer.
+    [GeneratedRegex(
+        @"\b(?:books?|excerpts?|sources?|texts?)\b[^.!?]{0,40}?\b(?:do|does)\s+not\s+(?:cover|provide|mention|describe|discuss|say|state|give)\b|" +
+        @"(?:книги|книгите|откъс|откъси|откъсите|източници|източниците|текст|текстовете)[^.!?]{0,40}?\bне\s+(?:обхващат|обхваща|покриват|покрива|съдържат|съдържа|описват|описва|разглеждат|разглежда|споменават|споменава|дават|дава|посочват|посочва)",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex NotCoveredRegex();
+
     public static FormatScore ScoreFormat(string language, string answer, int bookSources)
     {
         var numbers = CitedNumbers(answer);
@@ -74,7 +82,7 @@ public static partial class CaseScorer
         foreach (var sentence in SentenceBoundaryRegex().Split(normalized))
         {
             var text = MarkerRegex().Replace(sentence, string.Empty).Trim();
-            if (text.Length >= EvaluationConstants.MinClaimChars)
+            if (text.Length >= EvaluationConstants.MinClaimChars && !NotCoveredRegex().IsMatch(text))
             {
                 claims.Add(new AnswerClaim(text, CitedNumbers(sentence).Distinct().ToList()));
             }

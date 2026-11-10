@@ -123,6 +123,26 @@ public sealed class EvalScoringTests
         Assert.Equal(0, score.ExcerptPrecision);
     }
 
+    [Theory]
+    [InlineData("The indexed books do not cover the long-term prognosis.")]
+    [InlineData("The indexed books do not provide detailed information on treatment beyond these points [2].")]
+    [InlineData("Индексираните книги не обхващат лечението на заболяването.")]
+    [InlineData("Откъсите не описват прогнозата при деца.")]
+    public void ExtractClaims_SkipsSentencesSayingTheBooksDoNotCoverSomething(string gap)
+    {
+        var claims = CaseScorer.ExtractClaims($"Kawasaki disease is a systemic vasculitis [1]. {gap}");
+
+        Assert.Equal(["Kawasaki disease is a systemic vasculitis ."], claims.Select(c => c.Text));
+    }
+
+    [Fact]
+    public void ExtractClaims_KeepsClinicalSentencesThatMentionTheBooks()
+    {
+        var claims = CaseScorer.ExtractClaims("The books describe aspirin as first-line treatment [1].");
+
+        Assert.Single(claims);
+    }
+
     [Fact]
     public void ExtractClaims_SplitsSentencesAndKeepsTheirCitations()
     {

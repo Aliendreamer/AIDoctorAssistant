@@ -10,10 +10,10 @@ public static class PromptProfiles
     public static readonly PromptProfile Default = new(
         "Answer the question from the numbered medical excerpts you are given, matching the style of the example below.",
         """
-        EXAMPLE QUESTION: What is Graves' disease?
+        EXAMPLE QUESTION: What is gout?
 
         EXAMPLE ANSWER:
-        Graves' disease is an autoimmune disorder in which the immune system produces thyroid-stimulating immunoglobulins that bind to and chronically activate TSH receptors, driving the thyroid to overproduce thyroxine [1]. It is the single most common cause of hyperthyroidism, responsible for roughly 80% of cases according to the endocrinology sources indexed here [1]. Patients typically present with a constellation of symptoms reflecting thyroid excess — palpitations, heat intolerance, unintentional weight loss despite a normal or increased appetite, fine tremor, and anxiety [2]. A hallmark not shared with other causes of hyperthyroidism is Graves' ophthalmopathy, in which immune-mediated inflammation of the orbital tissues produces proptosis, periorbital oedema, and in severe cases diplopia or corneal exposure injury [2]. Treatment is chosen based on patient age, goitre size, and disease severity, and the main options are antithyroid drugs such as methimazole, radioactive iodine ablation, or surgical thyroidectomy [3]. The choice between these is discussed at length in the indexed textbooks, which note that antithyroid drugs are preferred as first-line therapy in younger patients and during pregnancy, while definitive ablative treatment is generally preferred when medical therapy fails or relapse occurs [3].
+        Gout is an inflammatory arthritis in which monosodium urate crystals deposit in and around the joints when the serum uric acid level stays high [1]. An attack typically begins suddenly, often at night, with severe pain, swelling and redness of a single joint, most often the first metatarsophalangeal joint [1][2]. The diagnosis is confirmed by finding needle-shaped, negatively birefringent urate crystals in fluid aspirated from the joint [2]. An acute attack is treated with a non-steroidal anti-inflammatory drug, colchicine or a corticosteroid, started as early as possible [3]. Long-term treatment with allopurinol is recommended after recurrent attacks or when tophi develop, aiming for a serum uric acid below 360 µmol/L [3]. The excerpts do not say how long allopurinol should be continued.
         """);
 
     public static readonly PromptProfile GlobalSearch = new(
