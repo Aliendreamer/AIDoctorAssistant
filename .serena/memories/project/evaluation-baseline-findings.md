@@ -182,3 +182,9 @@ Faithfulness 77%, citation accuracy 76%, passed 24 of 34, 4 sentences unjudged, 
   covered (honest, but 1 of 2 supported). Lost facts: G2 corticosteroids, G8 urgency, E3 deferring antibiotics,
   R5 definition. The model now writes 6 not-covered sentences. Pinned as baseline on 2026-11-10.
 - The sample answer drives style far more than instructions do for `qwen3:8b`.
+- Run `970dd663` (`49970e0`): the gout sample grew from 6 to 8 sentences (urgent aspiration, every treatment
+  option with its route, do not start allopurinol during an attack). Worse: passed 29 to 27, faithfulness
+  83.1% to 80.1%, citation accuracy 82% to 79%, fact recall unchanged at 81%. G8 now passes; G2, E3 and E6
+  fail. Longer answers bring back framing sentences the excerpts never state ("X is an important part of
+  management", "involves several key steps", "supportive care is essential"). Lost facts did not come back
+  (only G2 corticosteroids and E6 recovered one each). A longer sample is not the lever for lost facts.
