@@ -35,4 +35,4 @@
 - [x] 6.2 Delete `scripts/golden_run.py`
 - [x] 6.3 Start the stack, let the migration apply, and complete a first real run
 - [x] 6.4 Pin the first good run as the baseline
-- [ ] 6.5 Physician review of `golden-set.json`, setting `reviewed: true` per case
+- [ ] 6.5 Physician review of `golden-set.json`, setting `reviewed: true` per case — **deferred**: a physician has to do this; it is not code work (archived 2026-11-11)
