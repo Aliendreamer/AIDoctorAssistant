@@ -34,13 +34,7 @@ RRF fusion and a cross-encoder reranker, then generates a cited answer via a loc
 
 ## Architecture (.NET 10, `MedAssist.slnx`)
 
-| Project | Role |
-| --- | --- |
-| `MedAssist.Shared` | Models, interfaces, constants, and pure validation helpers (`BookIdRules`, `WebFetchPolicy`, `JwtKeyPolicy`, `DeterministicGuid`) |
-| `MedAssist.Data` | EF Core 9 + PostgreSQL — entities, migrations, repositories |
-| `MedAssist.AI` | Embedder (multilingual-e5-large ONNX), cross-encoder reranker, BM25 sparse vectorizer + vocab cache, Qdrant store, ingestion pipeline, Semantic Kernel plugins |
-| `MedAssist.Web` | FastEndpoints REST API + Blazor Server UI + host-managed ingestion worker |
-| `MedAssist.Tests` | xUnit; uses in-memory **SQLite** as a real relational provider for EF translation tests (the InMemory provider hides SQL-translation bugs) |
+`MedAssist.Tests` uses in-memory **SQLite** (not the EF InMemory provider, which hides SQL-translation bugs).
 
 Layering is acyclic and top-down: Shared ← Data ← AI ← Web. Tests reference all four.
 
@@ -59,33 +53,23 @@ compared with a baseline. Run it after any prompt, model, retrieval or context c
 
 ### Ingestion flow
 
-Admin uploads PDF → `IngestionQueue` (a `Channel`) → `IngestionWorker` (`BackgroundService`) →
-Marker OCR (PDF→Markdown) → chunk → ICD-10 enrich → dense + BM25 sparse vectors → Qdrant upsert
-(deterministic point ids) + Postgres status. Indexing is resumable via checkpoints.
-
-## Build, test, run
-
-```bash
-dotnet build MedAssist.slnx           # 0 warnings expected (TreatWarningsAsErrors is on)
-dotnet test MedAssist.Tests           # xUnit
-# Run one test class:
-dotnet test MedAssist.Tests --filter "FullyQualifiedName~<ClassName>"
-```
+Admin uploads a PDF or a zip of Word parts → `IngestionQueue` (a `Channel`) → `IngestionWorker`
+(`BackgroundService`) → markdown with page markers (PDF: shared MinerU OCR; Word parts: `DocxBookConverter`, no
+OCR, regenerated from all parts on every index) → chunk (page ranges per chunk) → ICD-10 enrich → dense + BM25
+sparse vectors → Qdrant upsert (deterministic point ids) + Postgres status. Indexing is resumable via checkpoints.
 
 ## Infrastructure — split stack
 
-Shared infra (PostgreSQL, Qdrant, Ollama, SearXNG, OpenTelemetry, Grafana/Prometheus/pgAdmin) is
-provided by the sibling **PersonalCommandCenter (PCC)** stack. This repo's `docker-compose.yml`
-builds only two services: `web` and `marker` (GPU OCR), joined to PCC's external
-`personalcommandcenter_default` network.
+Shared infra (PostgreSQL, Qdrant, Ollama, SearXNG, MinerU OCR, OpenTelemetry, Grafana/Prometheus/pgAdmin) is
+provided by the sibling **PersonalCommandCenter (PCC)** stack. This repo's `docker-compose.yml` builds only the
+`web` service, joined to PCC's external `personalcommandcenter_default` network.
 
 **Start PCC first** — `pcc-net` is an external network, so `docker compose up` here fails if PCC
 isn't up. The `medassist` database is auto-created by EF migrations on first run. See `README.md`.
 
 ## Conventions
 
-- Private fields are `_camelCase` (enforced by `.editorconfig`); constants centralized in
-  `MedAssist.Shared/Constants`.
+- Constants are centralized in `MedAssist.Shared/Constants`.
 - FastEndpoints use `Send.*` response methods (the endpoint-response-pattern spec).
 - Nullable enabled, file-scoped namespaces, `Async` suffix on async methods.
 - `config/` and `books/` are git-crypt encrypted at rest.

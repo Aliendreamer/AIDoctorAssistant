@@ -24,6 +24,8 @@ services:
       - shared_onnx_models:/models
       - ./books/uniquebooks:/books/uniquebooks
       - ./books/mdFiles:/books/mdfiles
+      # Word-part books (change ingest-docx-and-page-citations): one directory of .docx parts per book.
+      - ./books/docx:/books/docx
     networks:
       - medassist-net
       - pcc-net

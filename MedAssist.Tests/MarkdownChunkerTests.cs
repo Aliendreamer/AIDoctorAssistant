@@ -177,6 +177,19 @@ public sealed class MarkdownChunkerTests
         Assert.DoesNotContain(result, c => c.Text.Contains('­'));
     }
 
+    [Theory]
+    [InlineData("прием на макро- и микронутриенти", "прием на макро- и микронутриенти")]
+    [InlineData("прости захари (моно- или дизахариди)", "прости захари (моно- или дизахариди)")]
+    [InlineData("pre- and postoperative care", "pre- and postoperative care")]
+    [InlineData("много до- бро състояние", "много добро състояние")]
+    public void HyphenSpace_JoinsBrokenWords_ButKeepsSuspendedHyphens(string input, string expected)
+    {
+        // "макро- и микро-" is a suspended hyphen before "и/или/and/or" and must survive; "до- бро" is an OCR line break.
+        var result = _sut.Chunk("# Section\n\n" + input + " " + new string('x', 200));
+
+        Assert.StartsWith(expected, Assert.Single(result).Text);
+    }
+
     [Fact]
     public void MarkerH4Subsections_ProduceCorrectHeadingPath()
     {

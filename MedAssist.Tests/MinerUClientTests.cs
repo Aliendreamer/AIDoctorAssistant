@@ -78,6 +78,73 @@ public sealed class MinerUClientTests : IDisposable
         Assert.Contains(Path.GetFileName(_pdfPath), ex.Message);
     }
 
+    [Fact]
+    public async Task ConvertToMarkdown_RequestsContentList()
+    {
+        var handler = new FakeHandler(Ok("body"));
+
+        await MakeClient(handler).ConvertToMarkdownAsync(_pdfPath);
+
+        Assert.Matches("name=return_content_list\\s+true", handler.LastBody);
+    }
+
+    [Fact]
+    public async Task ConvertToMarkdown_BuildsMarkdownFromContentList_WithPageMarkers()
+    {
+        const string blocks = """
+            [
+              { "type": "text", "text": "Глава 1", "text_level": 1, "page_idx": 0 },
+              { "type": "text", "text": "Първи абзац.", "page_idx": 0 },
+              { "type": "image", "img_path": "a.jpg", "image_caption": ["Фигура 1-1. Схема."], "page_idx": 1 },
+              { "type": "table", "table_caption": ["Таблица 1-1"], "table_body": "<table><tr><td>A</td></tr></table>", "table_footnote": ["Източник: X"], "page_idx": 1 },
+              { "type": "equation", "text": "$$a=b$$", "page_idx": 2 },
+              { "type": "page_number", "text": "17", "page_idx": 2 }
+            ]
+            """;
+        var handler = new FakeHandler(_ => ContentList(blocks, md: "ignored"));
+
+        var md = await MakeClient(handler).ConvertToMarkdownAsync(_pdfPath);
+
+        var expected = string.Join("\n\n",
+            "<!-- page pdf=1 -->",
+            "# Глава 1",
+            "Първи абзац.",
+            "<!-- page pdf=2 -->",
+            "Фигура 1-1. Схема.",
+            "Таблица 1-1",
+            "<table><tr><td>A</td></tr></table>",
+            "Източник: X",
+            "<!-- page pdf=3 -->",
+            "$$a=b$$");
+        Assert.Equal(expected, md);
+    }
+
+    [Fact]
+    public async Task ConvertToMarkdown_AcceptsContentListAsJsonString()
+    {
+        var encoded = System.Text.Json.JsonSerializer.Serialize("""[{ "type": "text", "text": "Абзац.", "page_idx": 4 }]""");
+        var handler = new FakeHandler(_ => Json(HttpStatusCode.OK,
+            $$"""{ "results": { "test.pdf": { "md": "ignored", "content_list": {{encoded}} } } }"""));
+
+        var md = await MakeClient(handler).ConvertToMarkdownAsync(_pdfPath);
+
+        Assert.Equal("<!-- page pdf=5 -->\n\nАбзац.", md);
+    }
+
+    [Fact]
+    public async Task ConvertToMarkdown_FallsBackToMarkdown_WhenContentListMissing()
+    {
+        var handler = new FakeHandler(Ok("# Only md"));
+
+        var md = await MakeClient(handler).ConvertToMarkdownAsync(_pdfPath);
+
+        Assert.Equal("# Only md", md);
+    }
+
+    private static HttpResponseMessage ContentList(string blocksJson, string md) =>
+        Json(HttpStatusCode.OK,
+            $$"""{ "results": { "test.pdf": { "md": {{System.Text.Json.JsonSerializer.Serialize(md)}}, "content_list": {{blocksJson}} } } }""");
+
     // MinerU's /file_parse response envelope: results is keyed by the uploaded file; each entry
     // carries the requested output ("md" here).
     private static Func<HttpRequestMessage, HttpResponseMessage> Ok(string markdown) =>

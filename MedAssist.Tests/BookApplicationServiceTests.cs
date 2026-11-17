@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 using MedAssist.Data;
 using MedAssist.Data.Entities;
@@ -23,6 +24,7 @@ public sealed class BookApplicationServiceTests : IDisposable
     private readonly string _tempRoot;
     private readonly string _pdfDir;
     private readonly string _mdDir;
+    private readonly string _docxDir;
     private readonly IngestionQueue _queue = new();
     private readonly BookApplicationService _sut;
 
@@ -44,13 +46,19 @@ public sealed class BookApplicationServiceTests : IDisposable
         _tempRoot = Path.Combine(Path.GetTempPath(), "medassist-tests-" + Guid.NewGuid().ToString("N"));
         _pdfDir = Path.Combine(_tempRoot, "pdf");
         _mdDir = Path.Combine(_tempRoot, "md");
+        _docxDir = Path.Combine(_tempRoot, "docx");
         Directory.CreateDirectory(_pdfDir);
         Directory.CreateDirectory(_mdDir);
 
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Books:PdfPath"] = _pdfDir,
-            ["Books:MdPath"] = _mdDir
+            ["Books:MdPath"] = _mdDir,
+            ["Books:DocxPath"] = _docxDir,
+            // Small limits so the size checks are testable; production uses DocxUploadLimits defaults.
+            ["Books:DocxMaxEntryBytes"] = "1000",
+            ["Books:DocxMaxTotalBytes"] = "5000",
+            ["Books:DocxMaxEntries"] = "10",
         }).Build();
 
         _sut = new BookApplicationService(
@@ -144,6 +152,135 @@ public sealed class BookApplicationServiceTests : IDisposable
         var result = await _sut.TriggerIndexAsync(id, force: false);
 
         Assert.Equal(TriggerIndexOutcome.AlreadyInProgress, result.Outcome);
+    }
+
+    // ---------- Word-part zip uploads (change ingest-docx-and-page-citations) ----------
+
+    private static Stream Zip(params (string Name, string Content)[] entries)
+    {
+        var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, content) in entries)
+            {
+                using var writer = new StreamWriter(zip.CreateEntry(name).Open());
+                writer.Write(content);
+            }
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    private Task<BookUploadResult> UploadZipAsync(params (string Name, string Content)[] entries) =>
+        _sut.UploadAsync(new UploadBookInput("nelson-20-bg", "Nelson", "Kliegman", "bg", "20", Zip(entries), "part.zip"));
+
+    private string PartsDir => Path.Combine(_docxDir, "nelson-20-bg");
+
+    private string[] StagingDirs() => Directory.Exists(_docxDir)
+        ? Directory.GetDirectories(_docxDir).Where(d => Path.GetFileName(d).StartsWith('.')).ToArray()
+        : [];
+
+    [Fact]
+    public async Task Upload_DocxZip_StoresPartsAndPointsBookAtDirectory()
+    {
+        var result = await UploadZipAsync(("Храносмилателна система/1-Nelson_XVIII_305_BG.docx", "a"), ("Храносмилателна система/", ""),
+            ("Храносмилателна система/2-Nelson_XVIII_BG_PDF2551-2555.docx", "b"));
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(["1-Nelson_XVIII_305_BG.docx", "2-Nelson_XVIII_BG_PDF2551-2555.docx"],
+            Directory.GetFiles(PartsDir).Select(Path.GetFileName).Order());
+        var book = await _db.Books.SingleAsync();
+        Assert.Equal(PartsDir, book.FilePath);
+        Assert.Equal(BookStatus.Pending, book.Status);
+        Assert.False(result.PreviouslyIndexed);
+    }
+
+    [Fact]
+    public async Task Upload_SecondZip_AddsPartsAndReplacesSameNamedPart()
+    {
+        await UploadZipAsync(("a.docx", "first"), ("b.docx", "old"));
+
+        var result = await UploadZipAsync(("b.docx", "new"), ("c.docx", "third"));
+
+        Assert.True(result.Success, result.Message);
+        Assert.Equal(["a.docx", "b.docx", "c.docx"], Directory.GetFiles(PartsDir).Select(Path.GetFileName).Order());
+        Assert.Equal("new", await File.ReadAllTextAsync(Path.Combine(PartsDir, "b.docx")));
+        Assert.Single(await _db.Books.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("notes.txt")]
+    [InlineData("../../etc/x.docx")]
+    [InlineData("dir/../x.docx")]
+    public async Task Upload_ZipWithBadEntry_RejectedAndStoresNothing(string badName)
+    {
+        var result = await UploadZipAsync(("a.docx", "ok"), (badName, "bad"));
+
+        Assert.False(result.Success);
+        Assert.Equal(UploadError.InvalidZip, result.Error);
+        Assert.False(Directory.Exists(PartsDir) && Directory.EnumerateFileSystemEntries(PartsDir).Any());
+        Assert.Empty(await _db.Books.ToListAsync());
+        Assert.DoesNotContain(StagingDirs(), _ => true);
+    }
+
+    [Fact]
+    public async Task Upload_OversizedEntry_RejectedAndExistingPartsUntouched()
+    {
+        await UploadZipAsync(("a.docx", "keep me"));
+
+        var result = await UploadZipAsync(("a.docx", "replacement"), ("big.docx", new string('x', 1001)));
+
+        Assert.False(result.Success);
+        Assert.Equal(UploadError.InvalidZip, result.Error);
+        Assert.Equal(["a.docx"], Directory.GetFiles(PartsDir).Select(Path.GetFileName));
+        Assert.Equal("keep me", await File.ReadAllTextAsync(Path.Combine(PartsDir, "a.docx")));
+        Assert.DoesNotContain(StagingDirs(), _ => true);
+    }
+
+    [Fact]
+    public async Task Upload_TooManyEntries_Rejected()
+    {
+        var entries = Enumerable.Range(1, 11).Select(i => ($"{i}.docx", "x")).ToArray();
+
+        var result = await UploadZipAsync(entries);
+
+        Assert.Equal(UploadError.InvalidZip, result.Error);
+    }
+
+    [Fact]
+    public async Task Upload_TotalTooLarge_Rejected()
+    {
+        var entries = Enumerable.Range(1, 6).Select(i => ($"{i}.docx", new string('x', 900))).ToArray();
+
+        var result = await UploadZipAsync(entries);
+
+        Assert.Equal(UploadError.InvalidZip, result.Error);
+    }
+
+    [Fact]
+    public async Task Upload_ToIndexedBook_ReportsPreviouslyIndexed()
+    {
+        await UploadZipAsync(("a.docx", "first"));
+        var book = await _db.Books.SingleAsync();
+        book.Status = BookStatus.Indexed;
+        await _db.SaveChangesAsync();
+
+        var result = await UploadZipAsync(("b.docx", "second"));
+
+        Assert.True(result.PreviouslyIndexed);
+    }
+
+    [Fact]
+    public async Task TriggerIndex_WordBookWithoutCachedMarkdown_Starts()
+    {
+        var upload = await UploadZipAsync(("a.docx", "part"));
+
+        var result = await _sut.TriggerIndexAsync(upload.Id, force: false);
+
+        Assert.Equal(TriggerIndexOutcome.Started, result.Outcome);
+        var job = await DequeueOneAsync();
+        Assert.Equal(PartsDir, job!.FilePath);
     }
 
     private async Task<int> SeedBookAsync(string bookId, BookStatus status, bool withPdf)

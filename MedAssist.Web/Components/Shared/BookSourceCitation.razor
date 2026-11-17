@@ -15,9 +15,9 @@
     {
         <span class="text-muted"> &gt; @Citation.SectionTitle</span>
     }
-    @if (Citation.PageStart.HasValue)
+    @if (PageLabel.Format(Citation) is { Length: > 0 } pageLabel)
     {
-        <span class="text-muted"> | pp. @Citation.PageStart–@Citation.PageEnd</span>
+        <span class="text-muted"> | @pageLabel</span>
     }
 </div>
 

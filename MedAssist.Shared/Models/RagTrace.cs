@@ -21,6 +21,8 @@ public sealed record TracedChunk
     public string SectionTitle { get; init; } = string.Empty;
     public int PageStart { get; init; }
     public int PageEnd { get; init; }
+    public string? PrintedPageStart { get; init; }
+    public string? PrintedPageEnd { get; init; }
     public float Score { get; init; }
     public string Text { get; init; } = string.Empty;
 }

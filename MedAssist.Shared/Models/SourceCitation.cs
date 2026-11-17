@@ -11,6 +11,8 @@ public sealed class SourceCitation
     public string? SectionTitle { get; init; }
     public int? PageStart { get; init; }
     public int? PageEnd { get; init; }
+    public string? PrintedPageStart { get; init; }
+    public string? PrintedPageEnd { get; init; }
 
     // Web source fields
     public string? Url { get; init; }

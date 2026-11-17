@@ -20,6 +20,8 @@ public static class VectorStoreConstants
         public const string SectionTitle = "section_title";
         public const string PageStart = "page_start";
         public const string PageEnd = "page_end";
+        public const string PrintedPageStart = "printed_page_start";
+        public const string PrintedPageEnd = "printed_page_end";
         public const string ChunkIndex = "chunk_index";
         public const string ContentType = "content_type";
         public const string Text = "text";

@@ -15,7 +15,7 @@
 @if (_success)
 {
     <div class="alert alert-success">
-        Book uploaded successfully. <a href="/admin/books">Back to Books</a>
+        @_successMessage <a href="/admin/books">Back to Books</a>
     </div>
 }
 else
@@ -60,11 +60,11 @@ else
         </div>
 
         <div class="mb-3">
-            <label class="form-label">PDF File</label>
-            <InputFile OnChange="OnFileSelected" accept=".pdf" class="form-control" />
+            <label class="form-label">Book file (PDF, or a zip of Word parts)</label>
+            <InputFile OnChange="OnFileSelected" accept=".pdf,.zip" class="form-control" />
             @if (_fileName is null && _submitted)
             {
-                <div class="text-danger">Please select a PDF file.</div>
+                <div class="text-danger">Please select a PDF or a zip of Word parts.</div>
             }
         </div>
 
@@ -89,6 +89,7 @@ else
     private string? _fileName;
     private bool _uploading;
     private bool _success;
+    private string? _successMessage;
     private bool _submitted;
     private string? _error;
 
@@ -120,6 +121,7 @@ else
             if (success)
             {
                 _success = true;
+                _successMessage = message;
             }
             else
             {

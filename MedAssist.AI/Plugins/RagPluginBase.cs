@@ -224,7 +224,9 @@ public abstract partial class RagPluginBase
             ChapterTitle = c.ChapterTitle,
             SectionTitle = c.SectionTitle,
             PageStart = c.PageStart,
-            PageEnd = c.PageEnd
+            PageEnd = c.PageEnd,
+            PrintedPageStart = c.PrintedPageStart,
+            PrintedPageEnd = c.PrintedPageEnd
         }).ToList();
 
         var prompt = AnswerPromptBuilder.BuildBookAnswer(Profile, query, excerpts, history);
@@ -269,6 +271,8 @@ public abstract partial class RagPluginBase
         SectionTitle = chunk.SectionTitle,
         PageStart = chunk.PageStart,
         PageEnd = chunk.PageEnd,
+        PrintedPageStart = chunk.PrintedPageStart,
+        PrintedPageEnd = chunk.PrintedPageEnd,
         Score = score,
         Text = chunk.Text,
     };

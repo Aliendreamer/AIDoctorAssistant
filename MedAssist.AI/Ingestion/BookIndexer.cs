@@ -81,10 +81,10 @@ public sealed class BookIndexer
         // any sparse vector is produced (audit P1-5). Without this, the first book on a fresh corpus
         // would be stored with empty sparse vectors. Runs over every chunk on each attempt; the
         // contribution is applied as a delta, so re-running on resume is an idempotent no-op.
-        foreach (var (_, text, _) in allChunks)
+        foreach (var chunkPart in allChunks)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _vocabBuilder.AddChunk(text);
+            _vocabBuilder.AddChunk(chunkPart.Text);
         }
 
         await _vocabBuilder.FlushAsync(bookId, cancellationToken);
@@ -102,7 +102,7 @@ public sealed class BookIndexer
         for (var i = resumeFromIndex; i < allChunks.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var (headingPath, text, contentType) = allChunks[i];
+            var (headingPath, text, contentType, pages) = allChunks[i];
             var parts = headingPath.Split(" > ", 2);
 
             var icdCodes = await _enricher.GetIcdCodesAsync(text, cancellationToken);
@@ -114,8 +114,10 @@ public sealed class BookIndexer
                 Language = language,
                 ChapterTitle = parts.Length > 0 ? parts[0] : string.Empty,
                 SectionTitle = parts.Length > 1 ? parts[1] : string.Empty,
-                PageStart = 0,
-                PageEnd = 0,
+                PageStart = pages.PdfStart,
+                PageEnd = pages.PdfEnd,
+                PrintedPageStart = pages.PrintedStart,
+                PrintedPageEnd = pages.PrintedEnd,
                 ChunkIndex = i,
                 ContentType = contentType,
                 Text = text,
@@ -199,7 +201,7 @@ public sealed class BookIndexer
     }
 
     private async Task IndexSectionSummariesAsync(
-        IReadOnlyList<(string HeadingPath, string Text, ContentType ContentType)> allChunks,
+        IReadOnlyList<MarkdownChunk> allChunks,
         string bookId,
         string title,
         string author,

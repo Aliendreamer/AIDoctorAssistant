@@ -38,7 +38,7 @@ public sealed class QdrantVectorStore : IVectorStore
         await _client.UpsertAsync(VectorStoreConstants.CollectionName, points, cancellationToken: cancellationToken);
     }
 
-    private static PointStruct BuildPoint(MedicalChunk chunk, float[] denseVector, DomainSparseVector sparseVector)
+    internal static PointStruct BuildPoint(MedicalChunk chunk, float[] denseVector, DomainSparseVector sparseVector)
     {
         var namedVectors = new NamedVectors();
 
@@ -58,7 +58,7 @@ public sealed class QdrantVectorStore : IVectorStore
         // Deterministic id from the chunk's identity so re-indexing overwrites instead of
         // appending duplicate points (audit P1-6). Summaries get a distinct key namespace.
         var pointKey = $"{(chunk.IsSummary ? "summary:" : string.Empty)}{chunk.BookId}:{chunk.ChunkIndex}";
-        return new PointStruct
+        var point = new PointStruct
         {
             Id = new PointId { Uuid = DeterministicGuid.Create(pointKey).ToString() },
             Vectors = new Vectors { Vectors_ = namedVectors },
@@ -79,6 +79,16 @@ public sealed class QdrantVectorStore : IVectorStore
                 [VectorStoreConstants.Payload.IsSummary] = chunk.IsSummary,
             }
         };
+
+        // Printed pages are optional (change ingest-docx-and-page-citations): only books whose source states them
+        // have one, so the key is written only when known.
+        if (chunk.PrintedPageStart is not null)
+        {
+            point.Payload[VectorStoreConstants.Payload.PrintedPageStart] = chunk.PrintedPageStart;
+            point.Payload[VectorStoreConstants.Payload.PrintedPageEnd] = chunk.PrintedPageEnd ?? chunk.PrintedPageStart;
+        }
+
+        return point;
     }
 
     public async Task<IReadOnlyList<MedicalChunk>> SearchAsync(
@@ -309,7 +319,7 @@ public sealed class QdrantVectorStore : IVectorStore
 
     private static MedicalChunk MapRetrievedToChunk(RetrievedPoint point) => MapPayload(point.Payload);
 
-    private static MedicalChunk MapPayload(Google.Protobuf.Collections.MapField<string, Value> payload) => new()
+    internal static MedicalChunk MapPayload(Google.Protobuf.Collections.MapField<string, Value> payload) => new()
     {
         BookId = payload[VectorStoreConstants.Payload.BookId].StringValue,
         BookTitle = payload[VectorStoreConstants.Payload.BookTitle].StringValue,
@@ -317,8 +327,14 @@ public sealed class QdrantVectorStore : IVectorStore
         Language = payload[VectorStoreConstants.Payload.Language].StringValue,
         ChapterTitle = payload[VectorStoreConstants.Payload.ChapterTitle].StringValue,
         SectionTitle = payload[VectorStoreConstants.Payload.SectionTitle].StringValue,
-        PageStart = (int)payload[VectorStoreConstants.Payload.PageStart].IntegerValue,
-        PageEnd = (int)payload[VectorStoreConstants.Payload.PageEnd].IntegerValue,
+        // Page fields are read tolerantly: a missing key or 0 means the page is unknown (points indexed before page
+        // tracking), never an exception.
+        PageStart = payload.TryGetValue(VectorStoreConstants.Payload.PageStart, out var pageStart) ? (int)pageStart.IntegerValue : 0,
+        PageEnd = payload.TryGetValue(VectorStoreConstants.Payload.PageEnd, out var pageEnd) ? (int)pageEnd.IntegerValue : 0,
+        PrintedPageStart = payload.TryGetValue(VectorStoreConstants.Payload.PrintedPageStart, out var printedStart)
+            && !string.IsNullOrEmpty(printedStart.StringValue) ? printedStart.StringValue : null,
+        PrintedPageEnd = payload.TryGetValue(VectorStoreConstants.Payload.PrintedPageEnd, out var printedEnd)
+            && !string.IsNullOrEmpty(printedEnd.StringValue) ? printedEnd.StringValue : null,
         ChunkIndex = (int)payload[VectorStoreConstants.Payload.ChunkIndex].IntegerValue,
         ContentType = Enum.Parse<ContentType>(payload[VectorStoreConstants.Payload.ContentType].StringValue, ignoreCase: true),
         Text = payload[VectorStoreConstants.Payload.Text].StringValue,

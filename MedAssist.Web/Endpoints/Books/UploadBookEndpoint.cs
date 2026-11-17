@@ -54,7 +54,9 @@ public sealed class UploadBookEndpoint(BookApplicationService books) : Endpoint<
             Id = result.Id,
             BookId = req.BookId,
             Status = BookStatus.Pending.ToString().ToLowerInvariant(),
-            Message = $"Book '{req.Title}' uploaded. POST /api/admin/index?id={result.Id} to index."
+            Message = result.PreviouslyIndexed
+                ? $"{result.Message} POST /api/admin/index?id={result.Id}&force=true to re-index."
+                : $"{result.Message} POST /api/admin/index?id={result.Id} to index."
         }, cancellation: ct);
     }
 }

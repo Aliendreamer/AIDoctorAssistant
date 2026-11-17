@@ -152,5 +152,7 @@ public sealed class EvaluationRunner(
     }
 
     private static string Describe(TracedChunk chunk) =>
-        $"{chunk.BookTitle} — {chunk.SectionTitle} (pp. {chunk.PageStart}–{chunk.PageEnd})";
+        PageLabel.Format(chunk.PageStart, chunk.PageEnd, chunk.PrintedPageStart, chunk.PrintedPageEnd) is { Length: > 0 } pages
+            ? $"{chunk.BookTitle} — {chunk.SectionTitle} ({pages})"
+            : $"{chunk.BookTitle} — {chunk.SectionTitle}";
 }

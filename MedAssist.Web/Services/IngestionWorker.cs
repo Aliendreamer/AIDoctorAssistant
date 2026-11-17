@@ -73,19 +73,13 @@ public sealed class IngestionWorker(
         {
             var indexer = scope.ServiceProvider.GetRequiredService<BookIndexer>();
 
-            string markdown;
-            if (File.Exists(markdownPath))
-            {
-                logger.LogInformation("Using cached markdown for {BookId}", job.BookSlug);
-                markdown = await File.ReadAllTextAsync(markdownPath, ct);
-            }
-            else
-            {
-                var mineru = scope.ServiceProvider.GetRequiredService<MinerUClient>();
-                logger.LogInformation("Converting {BookId} via MinerU at {Path}", job.BookSlug, job.FilePath);
-                markdown = await mineru.ConvertToMarkdownAsync(job.FilePath, ct);
-                await File.WriteAllTextAsync(markdownPath, markdown, ct);
-            }
+            var markdown = await BookMarkdownLoader.LoadAsync(
+                job.FilePath,
+                markdownPath,
+                () => scope.ServiceProvider.GetRequiredService<MinerUClient>(),
+                scope.ServiceProvider.GetRequiredService<DocxBookConverter>(),
+                logger,
+                ct);
 
             logger.LogInformation("Starting indexing for {BookId}", job.BookSlug);
             await indexer.IndexAsync(markdown, job.BookSlug, job.Title, job.Author, job.Language, job.Edition, ct);

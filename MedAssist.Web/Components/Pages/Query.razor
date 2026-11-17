@@ -133,9 +133,9 @@
                                                     @if (!string.IsNullOrEmpty(src.ChapterTitle)) { <span class="sep">›</span> @src.ChapterTitle }
                                                     @if (!string.IsNullOrEmpty(src.SectionTitle)) { <span class="sep">›</span> @src.SectionTitle }
                                                 </span>
-                                                @if (src.PageStart.HasValue)
+                                                @if (PageLabel.Format(src) is { Length: > 0 } pageLabel)
                                                 {
-                                                    <span class="source-meta">p.&nbsp;@src.PageStart@(src.PageEnd.HasValue && src.PageEnd != src.PageStart ? $"–{src.PageEnd}" : "")</span>
+                                                    <span class="source-meta">@pageLabel</span>
                                                 }
                                                 else
                                                 {
@@ -334,10 +334,9 @@
         if (s.SourceType == SourceType.Book)
         {
             var label = s.BookTitle ?? "Book";
-            if (s.PageStart.HasValue)
+            if (PageLabel.Format(s) is { Length: > 0 } pageLabel)
             {
-                label += $", p. {s.PageStart}" +
-                    (s.PageEnd.HasValue && s.PageEnd != s.PageStart ? $"–{s.PageEnd}" : "");
+                label += $", {pageLabel}";
             }
             return label;
         }

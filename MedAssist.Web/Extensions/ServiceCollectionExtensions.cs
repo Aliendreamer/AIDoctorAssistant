@@ -131,6 +131,8 @@ internal static class ServiceCollectionExtensions
         });
         services.AddTransient<MarkdownChunker>();
         services.AddTransient<ChunkEnricher>();
+        // Word-part books are converted in process, without OCR (change ingest-docx-and-page-citations).
+        services.AddSingleton<DocxBookConverter>();
         services.AddTransient<VocabularyBuilder>();
         services.AddTransient<BookRepository>();
         services.AddTransient<CheckpointRepository>();

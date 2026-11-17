@@ -110,3 +110,23 @@ keeping with the local-only / no-external-exposure deployment model for clinical
 
 Verdict order to trial first: BGE-M3 (drop-in dim, unifies dense+sparse) and e5-large-instruct
 (cheapest), then Qwen3 if quality justifies the re-index.
+
+### Seed the ICD-10 illness dictionary — deferred from `ingest-docx-and-page-citations` (2026-11-17)
+
+The `illnesses` and `illness_aliases` tables are empty and nothing in the code writes to them. Two features read
+them and silently do nothing:
+
+- **Ingestion ICD tagging** — `ChunkEnricher` matches chunk text against the dictionary, so every chunk indexed so
+  far has no ICD codes.
+- **Query expansion** — `MedicalDictionaryService` finds no synonyms or Latin/Bulgarian aliases to add.
+
+Open decision: the data source. Candidates are the official Bulgarian МКБ-10 classification (Bulgarian names and
+codes) plus WHO ICD-10 English names, or a list the user supplies. Once seeded, re-index the books so their chunks
+get ICD codes, then run the golden set to measure the effect on retrieval.
+
+### Re-extract the existing books for page citations — deferred from `ingest-docx-and-page-citations` (2026-11-17)
+
+The 8 books indexed before page tracking have no page data: their extracted markdown in `books/mdFiles/` has no
+page markers, so citations hide the page instead of showing `pp. 0–0`. Re-running each original PDF through MinerU
+with page tracking, then re-indexing, gives them real (PDF) page numbers. It costs GPU time per book, so do it book
+by book when convenient.
