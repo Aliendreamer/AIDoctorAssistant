@@ -56,9 +56,11 @@
 
 - [x] 6.1 Fix `CLAUDE.md`: Marker → MinerU in the ingestion flow and the compose services line
 - [x] 6.2 `dotnet build MedAssist.slnx` with 0 warnings; `dotnet test MedAssist.Tests` green
-- [ ] 6.3 With approval, rebuild `web`, seed `nelson-20-bg` from `seed_books.sql` (its markdown is committed in
+- [x] 6.3 With approval, rebuild `web`, seed `nelson-20-bg` from `seed_books.sql` (its markdown is committed in
   `books/mdFiles`, so no zip upload), index it, and check in the UI (Playwright, <http://localhost:8081>) that a
   Nelson answer cites printed pages and an old-book answer shows no page
-- [ ] 6.4 Run the golden set against baseline `a7c83bb3`; record the result and that old-book answers are
-  unchanged
+- [x] 6.4 Run the golden set against the pinned baseline (`9c9c2df9`; `a7c83bb3` was out of date); record the
+  result and that old-book answers are unchanged. With Nelson `0e19ee84`: 27 of 34 vs 28 in a no-Nelson control
+  `50e3ef46` on the same setup (R2 gained; R5, G11's fact and G12 lost); other answers identical. The first run
+  `1c1aa109` (23) was not reproducible. See `mem:project/evaluation-baseline-findings`
 - [x] 6.5 Save a Serena memory on the docx conventions and page-marker format

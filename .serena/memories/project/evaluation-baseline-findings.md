@@ -188,3 +188,25 @@ Faithfulness 77%, citation accuracy 76%, passed 24 of 34, 4 sentences unjudged, 
   fail. Longer answers bring back framing sentences the excerpts never state ("X is an important part of
   management", "involves several key steps", "supportive care is essential"). Lost facts did not come back
   (only G2 corticosteroids and E6 recovered one each). A longer sample is not the lever for lost facts.
+
+## Nelson added (runs `1c1aa109`, `50e3ef46`, `0e19ee84`, 2026-11-19, not pinned)
+
+Change `ingest-docx-and-page-citations` added Nelson (11 books, 13,706 chunks) and page citations.
+
+| Run | Books | Passed | Fact recall | Faithfulness | Lost in retrieval | Lost in generation |
+| --- | --- | --- | --- | --- | --- | --- |
+| `9c9c2df9` baseline | 10 | 29 | 81% | 83% | 6 | 6 |
+| `1c1aa109` | 11 | 23 | 75% | 80% | 9 | 7 |
+| `50e3ef46` control | 10 | 28 | 80% | 83% | 6 | 7 |
+| `0e19ee84` repeat | 11 | 27 | 77% | 82% | 7 | 8 |
+
+- **`1c1aa109` was a one-off.** 18 questions had byte-identical prompts yet different answers. The control
+  matched the baseline answer for answer, and the repeat matched the control wherever excerpts were equal.
+  Cause unknown (same Ollama 0.30.9 image, cold model load in both). If a run looks off, repeat it first.
+- **Real Nelson effect, 6 questions with changed excerpts:** R2 now passes. R5 (Guillain-Barré) gets tangential
+  Nelson chunks (enteric and hepatitis B tables) and fails. G11 swaps two relevant excerpts for a Nelson one
+  and drops the IV rehydration fact, and its follow-up G12 then fails with an identical answer.
+- Nelson reaches the excerpts of only 6 of 34 questions; the translated Parts cover little of the golden set.
+- `0e19ee84` pinned as baseline on 2026-11-19.
+- Removing a book for a control: delete its Qdrant points, subtract `bm25_book_terms` from `bm25_vocab`
+  (drop rows at 0), subtract its `chunk_count` from `bm25_stats`, then restart `web` to drop the cache.
