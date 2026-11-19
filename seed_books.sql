@@ -23,7 +23,10 @@ VALUES
   ('pediatrics-litvinenko',                  'Педиатрия (Литвиненко)',                      'Литвиненко',          'bg', '',          '/books/uniquebooks/pediatrics-litvinenko.pdf',                  0, 'pending'),
   ('pediatrics-varna',                       'Педиатрия (Варна)',                           '',                    'bg', '',          '/books/uniquebooks/pediatrics-varna.pdf',                       0, 'pending'),
   ('poisonsandinjuries',                     'Отравяния и злополуки в детската възраст',    '',                    'bg', '',          '/books/uniquebooks/poisonsandinjuries.pdf',                     0, 'pending'),
-  ('practical-pediatrics',                   'Практическа педиатрия',                       '',                    'bg', '',          '/books/uniquebooks/practical-pediatrics.pdf',                   0, 'pending')
+  ('practical-pediatrics',                   'Практическа педиатрия',                       '',                    'bg', '',          '/books/uniquebooks/practical-pediatrics.pdf',                   0, 'pending'),
+  -- Word-part book (change ingest-docx-and-page-citations): the markdown in books/mdFiles is the committed source.
+  -- file_path is the (absent) parts directory; uploading a zip of parts there makes indexing regenerate the markdown.
+  ('nelson-20-bg',                           'Nelson — Педиатрия',                          'Kliegman, Stanton, St Geme, Schor', 'bg', '20-о издание', '/books/docx/nelson-20-bg',                  0, 'pending')
 ON CONFLICT (book_id) DO NOTHING;
 
 -- Verify:
