@@ -211,16 +211,24 @@ Change `ingest-docx-and-page-citations` added Nelson (11 books, 13,706 chunks) a
 - Removing a book for a control: delete its Qdrant points, subtract `bm25_book_terms` from `bm25_vocab`
   (drop rows at 0), subtract its `chunk_count` from `bm25_stats`, then restart `web` to drop the cache.
 
-## Chapter-level fixes (run `a910413d`, 2026-11-20, not pinned)
+## Chapter-level fixes (run `a910413d`, 2026-11-20, pinned)
 
-Two retrieval fixes for Nelson: chapter headings (`Глава N`) are always top level whatever the Word style, and a
-summary with a chapter but no section (text before the first subsection, 17% of summaries) now expands too.
+Two retrieval fixes: Nelson chapter headings (`Глава N`) are always top level whatever the Word style, and a
+summary with a chapter but no section (text before the first subsection) now expands too. The second fix applies
+to every book, not only Nelson.
 
 | Run | Passed | Fact recall | Faithfulness | Hit@1 | Lost in retrieval | Lost in generation |
 | --- | --- | --- | --- | --- | --- | --- |
 | `0e19ee84` baseline | 27 | 77% | 82% | 92% | 7 | 8 |
 | `a910413d` | 27 | 86% | 79% | 88% | 3 | 6 |
 
-- Verdict: no regression. Fact coverage rose 9 points, consistent with the empty-section scroll matching in Qdrant.
-- G7 (cystic fibrosis) now passes; E2 (croup) fails on faithfulness, 6 of 10 sentences supported.
+- Verdict: no regression. G7 (cystic fibrosis) now passes; E2 (croup) fails on faithfulness, 6 of 10 supported.
 - P95 latency rose 7.5 s (25 s to 32.6 s); mean latency is unchanged.
+- `a910413d` pinned as baseline on 2026-11-20.
+- Checked in Qdrant directly: `section_title` is stored as `""` (never missing, so `is_empty` finds nothing), and a
+  keyword match on `""` returns exactly the empty ones (52 of 1,102 Nelson summaries, same count as a full scroll).
+  The `ScrollSectionAsync` filter for such a chapter returns its content chunks.
+- Empty-section summaries across all books: 1,479 of 8,670 (17%), mostly `pediatrics-5th-edition` (890 of 1,920),
+  `basics-pediatrics` (231) and `pediatrics-litvinenko` (122). Only 8 are bibliography chapters.
+- Querying Qdrant: its port is not published on the host. Run `docker exec -i personalcommandcenter-qdrant-1 bash`
+  and send raw HTTP over `/dev/tcp/127.0.0.1/6333`, because the image has no curl.
