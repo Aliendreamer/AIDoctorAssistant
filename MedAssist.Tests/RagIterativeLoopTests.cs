@@ -268,6 +268,29 @@ public sealed class RagIterativeLoopTests
         Assert.True(scope.Trace.PromptTokens > 0);
     }
 
+    [Theory]
+    [InlineData("Section")]
+    [InlineData("")] // a chapter with text under its own heading and no subsection
+    public async Task SummaryHit_PullsInItsSectionsChunks(string sectionTitle)
+    {
+        var summary = new MedicalChunk
+        {
+            BookId = "nelson", BookTitle = "Nelson", ChapterTitle = "Глава 57", SectionTitle = sectionTitle,
+            ChunkIndex = 900, Text = "Глава 57\n\nДехидратацията…", IsSummary = true,
+        };
+        var sectionChunk = new MedicalChunk
+        {
+            BookId = "nelson", BookTitle = "Nelson", ChapterTitle = "Глава 57", SectionTitle = sectionTitle,
+            ChunkIndex = 7, Text = "Повечето случаи могат да бъдат лекувани с перорална рехидратация.",
+        };
+        var sut = MakePlugin(new StubVectorStore([summary], [sectionChunk]), new StubReranker(5.0f));
+
+        using var scope = RagRunScope.Begin(new RagRunOverrides());
+        await sut.SearchAsync("дехидратация", "bg");
+
+        Assert.Equal(sectionChunk.Text, Assert.Single(scope.Trace.Excerpts).Text);
+    }
+
     [Fact]
     public async Task ReferenceListChunks_NeverReachTheModel()
     {
@@ -454,10 +477,15 @@ public sealed class RagIterativeLoopTests
     private sealed class StubVectorStore : IVectorStore
     {
         private readonly IReadOnlyList<MedicalChunk> _chunks;
+        private readonly IReadOnlyList<MedicalChunk> _sectionChunks;
 
         public int SearchCallCount { get; private set; }
 
-        public StubVectorStore(IReadOnlyList<MedicalChunk> chunks) => _chunks = chunks;
+        public StubVectorStore(IReadOnlyList<MedicalChunk> chunks, IReadOnlyList<MedicalChunk>? sectionChunks = null)
+        {
+            _chunks = chunks;
+            _sectionChunks = sectionChunks ?? [];
+        }
 
         public Task<IReadOnlyList<MedicalChunk>> SearchAsync(
             float[] denseQueryVector, SparseVector? sparseQueryVector,
@@ -472,7 +500,10 @@ public sealed class RagIterativeLoopTests
             => Task.CompletedTask;
 
         public Task<IReadOnlyList<MedicalChunk>> ScrollSectionAsync(string chapterTitle, string sectionTitle, string bookId, int limit = 50, CancellationToken cancellationToken = default)
-            => Task.FromResult<IReadOnlyList<MedicalChunk>>([]);
+            => Task.FromResult<IReadOnlyList<MedicalChunk>>(_sectionChunks
+                .Where(c => c.ChapterTitle == chapterTitle && c.SectionTitle == sectionTitle && c.BookId == bookId)
+                .Take(limit)
+                .ToList());
 
         public Task DeleteCollectionAsync(CancellationToken cancellationToken = default)
             => Task.CompletedTask;

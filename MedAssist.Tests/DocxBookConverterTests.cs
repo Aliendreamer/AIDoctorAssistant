@@ -166,6 +166,41 @@ public sealed class DocxBookConverterTests
     }
 
     [Fact]
+    public void Convert_ChapterHeadingsAreTopLevel_WhateverTheirStyle()
+    {
+        // The translator styles chapters as Heading 1 in some parts and Heading 2 in others; without normalising,
+        // the sections of chapter 55 nest under chapter 53.
+        var part = Part("3-Nelson_VI_BG_PDF436-440.docx",
+            P("1", "Глава 53 — Дефицит на витамин K"),
+            P(null, "Текст за витамин K."),
+            P("21", "Глава 55 — Нарушения на електролитите"),
+            P("1", "55.1 Състав на телесните течности"),
+            P("21", "ПОДХОД"),
+            P(null, "Текст за течностите."));
+
+        var result = Converter().Convert([part]);
+
+        var expected = string.Join("\n\n",
+            "<!-- page pdf=436 -->",
+            "# Глава 53 — Дефицит на витамин K",
+            "Текст за витамин K.",
+            "# Глава 55 — Нарушения на електролитите",
+            "## 55.1 Състав на телесните течности",
+            "## ПОДХОД",
+            "Текст за течностите.");
+        Assert.Equal(expected, result.Markdown);
+    }
+
+    [Theory]
+    [InlineData("Глава 55 — Нарушения на електролитите", true)]
+    [InlineData("Глава 57. Терапия при дефицит на течности", true)]
+    [InlineData("Глава 332 — Нарушения на моториката (продължение)", true)]
+    [InlineData("Главата на бедрената кост", false)]
+    [InlineData("55.1 Състав на телесните течности", false)]
+    public void IsChapterHeading_MatchesNumberedChapters(string text, bool expected) =>
+        Assert.Equal(expected, DocxConventions.IsChapterHeading(text));
+
+    [Fact]
     public void Convert_RendersTables_AndSkipsEmptyParagraphs()
     {
         var part = Part("5-Nelson_VI_BG_PDF446-450.docx",

@@ -73,7 +73,9 @@ internal sealed class CandidateRetriever(
         CancellationToken cancellationToken)
     {
         var sections = candidates
-            .Where(c => c.IsSummary && !string.IsNullOrEmpty(c.SectionTitle))
+            // An empty section is a chapter's own text before its first subsection: it expands too, by chapter.
+            // Skipping it left 17% of summaries holding a search slot while pulling in nothing.
+            .Where(c => c.IsSummary && !string.IsNullOrEmpty(c.ChapterTitle))
             .Select(c => (c.ChapterTitle, c.SectionTitle, c.BookId))
             .Distinct()
             .ToList();

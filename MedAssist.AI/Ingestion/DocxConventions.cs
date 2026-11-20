@@ -54,6 +54,9 @@ public static partial class DocxConventions
         RegexOptions.IgnoreCase, matchTimeoutMilliseconds: 1000)]
     private static partial Regex MetaNoteRegex();
 
+    [GeneratedRegex(@"^Глава\s+\d+\b", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex ChapterHeadingRegex();
+
     [GeneratedRegex(@"^\s*(?<prefix>\d+(?:\.\d+)?)-Nelson_(?<part>[IVXLC]+)_", RegexOptions.IgnoreCase, matchTimeoutMilliseconds: 1000)]
     private static partial Regex NelsonPartNameRegex();
 
@@ -99,6 +102,12 @@ public static partial class DocxConventions
 
     /// <summary>A translator meta-note about the translation itself, not medical content.</summary>
     public static bool IsMetaNote(string text) => MetaNoteRegex().IsMatch(text);
+
+    /// <summary>
+    /// A numbered chapter heading (<c>Глава 55 — …</c>). The translator styles chapters as Heading 1 in some parts and
+    /// Heading 2 in others, so the converter makes these top level by text, not style.
+    /// </summary>
+    public static bool IsChapterHeading(string text) => ChapterHeadingRegex().IsMatch(text);
 
     /// <summary>The first PDF page in a part's file name (<c>…_PDF2636-2640.docx</c>), if any.</summary>
     public static int? FileNamePdfStart(string fileName) =>

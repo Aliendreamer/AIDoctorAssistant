@@ -210,3 +210,17 @@ Change `ingest-docx-and-page-citations` added Nelson (11 books, 13,706 chunks) a
 - `0e19ee84` pinned as baseline on 2026-11-19.
 - Removing a book for a control: delete its Qdrant points, subtract `bm25_book_terms` from `bm25_vocab`
   (drop rows at 0), subtract its `chunk_count` from `bm25_stats`, then restart `web` to drop the cache.
+
+## Chapter-level fixes (run `a910413d`, 2026-11-20, not pinned)
+
+Two retrieval fixes for Nelson: chapter headings (`Глава N`) are always top level whatever the Word style, and a
+summary with a chapter but no section (text before the first subsection, 17% of summaries) now expands too.
+
+| Run | Passed | Fact recall | Faithfulness | Hit@1 | Lost in retrieval | Lost in generation |
+| --- | --- | --- | --- | --- | --- | --- |
+| `0e19ee84` baseline | 27 | 77% | 82% | 92% | 7 | 8 |
+| `a910413d` | 27 | 86% | 79% | 88% | 3 | 6 |
+
+- Verdict: no regression. Fact coverage rose 9 points, consistent with the empty-section scroll matching in Qdrant.
+- G7 (cystic fibrosis) now passes; E2 (croup) fails on faithfulness, 6 of 10 sentences supported.
+- P95 latency rose 7.5 s (25 s to 32.6 s); mean latency is unchanged.

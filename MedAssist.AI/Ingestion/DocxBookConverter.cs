@@ -118,6 +118,13 @@ public sealed partial class DocxBookConverter(ILogger<DocxBookConverter> logger)
             var level = HeadingLevel(paragraph, headingLevels);
             if (level > 0)
             {
+                // Chapters are always top level and nothing else is, so sections nest under their chapter even
+                // where the translator styled the chapter one level down.
+                level = DocxConventions.IsChapterHeading(text) ? 1 : Math.Max(level, 2);
+            }
+
+            if (level > 0)
+            {
                 blocks.Add($"{new string('#', Math.Min(level, 6))} {text}");
             }
             else if (paragraph.ParagraphProperties?.NumberingProperties is not null)
